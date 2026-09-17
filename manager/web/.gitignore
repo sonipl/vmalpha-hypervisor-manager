@@ -1,0 +1,4 @@
+
+/tests/*.test.cjs
+
+/tests/built/

@@ -1,0 +1,16 @@
+[Unit]
+Description=Initialize VMALPHA local virtualization resources
+After=network-online.target firewalld.service virtqemud.socket virtnetworkd.socket virtstoraged.socket
+Wants=network-online.target
+Requires=virtqemud.socket virtnetworkd.socket virtstoraged.socket
+ConditionPathExists=!/var/lib/vmalpha/initialized
+
+[Service]
+Type=oneshot
+Environment=LC_ALL=C
+ExecStart=/usr/libexec/vmalpha-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target

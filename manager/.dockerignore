@@ -1,0 +1,11 @@
+.git
+**/node_modules
+web/dist
+web/tests/*.test.cjs
+config.yaml
+*.pem
+*.key
+*.qcow2
+*.iso
+
+web/tests/built

@@ -1,0 +1,11 @@
+[Unit]
+Description=Wait for VM Alpha network datastores
+Wants=network-online.target
+After=network-online.target virtstoraged.socket
+Before=virtqemud.service
+[Service]
+Type=oneshot
+Environment=LC_ALL=C
+ExecStart=/usr/libexec/vmalpha-storage-ready
+TimeoutStartSec=180
+RemainAfterExit=yes

@@ -1,0 +1,8 @@
+[Main]
+Product=VM Alpha Linux
+Version=1.0
+BugURL=https://www.vmalpha.com/
+IsFinal=True
+UUID=202609160000.x86_64
+[Compose]
+Lorax=VM Alpha Hypervisor 1.0

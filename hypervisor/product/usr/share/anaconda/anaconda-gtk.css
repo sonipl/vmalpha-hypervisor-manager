@@ -1,0 +1,7 @@
+@define-color product_bg_color #254b60;
+@define-color product_fg_color #ffffff;
+@define-color product_sidebar_bg_color #254b60;
+@define-color product_sidebar_fg_color #ffffff;
+AnacondaSpokeWindow #nav-box, AnacondaStandaloneWindow #nav-box { background-color: #254b60; color: white; }
+#logo { background-image: url('pixmaps/vmalpha.svg'); background-repeat: no-repeat; background-position: left center; }
+#sidebar { background-color: #254b60; background-image: none; color: white; }

@@ -1,0 +1,5 @@
+/* VM Alpha installer product presentation; upstream notices remain in the base distribution. */
+.logo-sidebar { background-image: none; background-color: #254b60; }
+.logo { background-image: url('/usr/share/anaconda/pixmaps/sidebar-vmalpha.svg'); background-repeat: no-repeat; background-position: center 15px; background-size: 145px 111px; background-color: transparent; }
+.product-logo { background-image: none; background-color: transparent; }
+AnacondaSpokeWindow #nav-box { background-color: #254b60; background-image: none; color: white; }

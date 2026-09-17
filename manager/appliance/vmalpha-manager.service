@@ -1,0 +1,23 @@
+[Unit]
+Description=VM Alpha Manager
+Requires=vmalpha-manager-firstboot.service
+After=postgresql.service vmalpha-manager-firstboot.service
+ConditionPathExists=/var/lib/vmalpha-manager/initialized
+
+[Service]
+User=vmalpha
+Group=vmalpha
+WorkingDirectory=/opt/vmalpha-manager
+EnvironmentFile=-/var/lib/vmalpha-manager/bootstrap.env
+ExecStart=/usr/local/bin/vmalpha-manager
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vmalpha-manager
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

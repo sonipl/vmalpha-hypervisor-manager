@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VMALPHA Host</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="../base1/cockpit.js"></script>
+  <script src="panel.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><span class="eyebrow">VMALPHA · ROCKY LINUX 9</span><h1>Your virtualization host</h1><p>Create and run virtual machines with KVM and libvirt.</p></header>
+    <section class="status" aria-label="Host identity"><div><span class="label">Host</span><strong id="hostname">Loading…</strong></div><div><span class="label">Release</span><strong>VMALPHA 0.1.2</strong></div><div><span class="label">Hardware virtualization</span><strong id="kvm">Checking…</strong></div></section>
+    <section class="grid" aria-label="Management tools">
+      <button data-page="/machines"><span class="number">01</span><h2>Virtual machines</h2><p>Create or import a guest. Manage power, CPU, memory, disks, and browser consoles.</p><span class="action">Open virtual machines →</span></button>
+      <button data-page="/storage"><span class="number">02</span><h2>Host storage</h2><p>Inspect the host’s local disks and filesystems. Guest storage pools are in Virtual machines.</p><span class="action">Open host storage →</span></button>
+      <button data-page="/network"><span class="number">03</span><h2>Host networking</h2><p>Inspect interfaces and connections. A default NAT network is prepared for guests.</p><span class="action">Open host networking →</span></button>
+      <button data-page="/system"><span class="number">04</span><h2>Host health</h2><p>Review resource usage, logs, and system services.</p><span class="action">Open overview →</span></button>
+    </section>
+    <aside><h2>Before creating your first guest</h2><p>Use your installer-created administrator account and enable administrative access in Cockpit when requested. Supply guest installation media, choose a storage pool, then select the default NAT network.</p><p>For a host installed inside vSphere, the outer VM must expose hardware-assisted virtualization. A detected KVM device does not replace a guest boot test.</p><p>This release manages a single host. AlphaFS, shared-storage clustering, Ceph, Kubernetes, and KubeVirt are not implemented in this candidate.</p></aside>
+    <footer>Powered by Rocky Linux, Cockpit Machines, QEMU/KVM, and libvirt. Candidate build: installation and VM lifecycle validation pending.</footer>
+  </main>
+</body>
+</html>

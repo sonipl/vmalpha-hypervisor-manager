@@ -1,0 +1,1 @@
+document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('brand');if(!b)return;const apply=()=>{if(b.textContent!=='VM Alpha Hypervisor')b.textContent='VM Alpha Hypervisor';b.setAttribute('aria-label','VM Alpha Hypervisor');};new MutationObserver(apply).observe(b,{childList:true});apply();});

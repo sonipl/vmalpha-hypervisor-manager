@@ -1,0 +1,15 @@
+[Unit]
+Description=Initialize VM Alpha Manager instance identity
+Wants=network-online.target
+After=network-online.target cloud-config.service
+Before=vmalpha-manager.service nginx.service
+ConditionPathExists=!/var/lib/vmalpha-manager/initialized
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vmalpha-manager-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target

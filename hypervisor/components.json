@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "release": "1.0",
+  "products": {
+    "hypervisor": "VM Alpha Hypervisor",
+    "os": "VM Alpha Linux",
+    "containers": "VM Alpha Container Platform",
+    "storage": "VM Alpha Storage"
+  },
+  "components": {
+    "kubernetes": "1.36.4",
+    "ceph": "20.2.4",
+    "ceph-csi": "3.17.1",
+    "containerd": "2.3.5",
+    "ceph-csi-operator": "1.0.5",
+    "runc": "1.5.1",
+    "cni-plugins": "1.9.1",
+    "flannel": "0.28.9",
+    "prometheus": "3.14.0",
+    "node-exporter": "1.12.1",
+    "kube-state-metrics": "2.20.0",
+    "libvirt-rbd-driver": "11.10.0-12.3.el9_8.vmalpha1"
+  },
+  "status": "development integration tested on two nodes; final clean ISO and three-/four-node acceptance pending",
+  "verified_date": "2026-09-17",
+  "sources": [
+    "https://dl.k8s.io/release/stable-1.36.txt",
+    "https://github.com/ceph/ceph-csi/blob/v3.17.1/README.md",
+    "https://github.com/ceph/ceph-csi/releases/tag/v3.17.1",
+    "https://github.com/containerd/containerd/blob/main/RELEASES.md"
+  ]
+}

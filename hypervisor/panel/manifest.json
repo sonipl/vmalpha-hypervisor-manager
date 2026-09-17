@@ -1,0 +1,8 @@
+{
+  "version": 0,
+  "requires": { "cockpit": "300" },
+  "menu": {
+    "index": { "label": "VMALPHA", "order": 5 }
+  },
+  "content-security-policy": "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self'; font-src 'self'; img-src 'self' data:"
+}
