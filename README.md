@@ -2,6 +2,14 @@
 
 Source snapshot of the VM Alpha Hypervisor and central Manager development projects.
 
+## Rocky Linux attribution
+
+VM Alpha Hypervisor uses the **[Rocky Linux® operating system](https://rockylinux.org/)** as its base. The Manager appliance build also uses a Rocky Linux base image. We thank the Rocky Linux project, its contributors and the Rocky Enterprise Software Foundation for that foundation.
+
+VM Alpha is an independent project, not an official Rocky Linux product. No affiliation, sponsorship or endorsement by the Rocky Enterprise Software Foundation is claimed. VM Alpha changes and support are the responsibility of this project.
+
+Rocky Linux® is a registered trademark of the Rocky Enterprise Software Foundation. See [third-party notices](THIRD_PARTY_NOTICES.md) for upstream licensing and attribution information.
+
 ## Source layout
 
 - `hypervisor/`: Rocky Linux installer/media build, KVM/libvirt Host Client, API brokers, storage/network integration, Kubernetes/Ceph helpers, monitoring, tests and documentation.

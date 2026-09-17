@@ -5,6 +5,14 @@ optional Kubernetes (VM Alpha Container Platform) and Ceph (VM Alpha Storage).
 It derives from Rocky Linux; upstream package identities, repository metadata,
 copyright and license notices remain intact.
 
+We credit the [Rocky Linux® project](https://rockylinux.org/), its contributors
+and the Rocky Enterprise Software Foundation for the base operating system.
+VM Alpha is independently developed and is not an official Rocky Linux product;
+no upstream sponsorship or endorsement is claimed. Rocky Linux® is a registered
+trademark of the Rocky Enterprise Software Foundation.
+Upstream packages keep their individual licenses; see the
+[Rocky Linux licensing information](https://rockylinux.org/legal/licensing).
+
 **Test candidate:** the exact final interactive ISO passed clean BIOS and UEFI
 installation, nested VM NAT/verified HTTPS and graceful reboot persistence on
 both hosts. Central Manager and advanced feature gates remain incomplete. See [the acceptance record](ACCEPTANCE.md) for actual results and

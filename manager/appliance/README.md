@@ -1,5 +1,13 @@
 # VM Alpha Manager appliance build (development)
 
+This appliance uses the [Rocky Linux® operating system](https://rockylinux.org/)
+as its base. Credit belongs to the Rocky Linux project, its contributors and
+the Rocky Enterprise Software Foundation. VM Alpha is an independent project;
+no affiliation, sponsorship or endorsement is claimed. Rocky Linux® is a
+registered trademark of the Rocky Enterprise Software Foundation. Base packages
+retain their individual licenses and notices; see the
+[upstream licensing information](https://rockylinux.org/legal/licensing).
+
 This package is under integration testing and is not an accepted release image.
 Use the official Rocky 9.8 GenericCloud Base x86_64 image, verify its detached
 checksum signature using the Rocky release key, and verify the image SHA256.
