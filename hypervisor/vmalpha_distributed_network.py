@@ -130,7 +130,8 @@ def create(ident,s,run,created):
   else:args+=['ipv4.method','disabled','ipv6.method','disabled','bridge.stp','no']
   if p['type']=='vlan':args+=['dev',p['parent'],'id',str(p['vlan'])]
   args+=['802-3-ethernet.mtu',str(s['mtu'])]
-  run(*args,timeout=15);created.append(p)
+  created.append(p)  # Track before execution: a timeout may have created it.
+  run(*args,timeout=15)
  for p in profiles(ident,s):run('nmcli','--wait','10','connection','up','id',p['id'],timeout=15)
 
 def handle(op,args,run):
