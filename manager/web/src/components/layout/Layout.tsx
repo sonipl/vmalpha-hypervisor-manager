@@ -188,7 +188,7 @@ export default function Layout({ children }: LayoutProps) {
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 md:hidden"
-          onClick={() => { setMobileMenuOpen(false); if (location.pathname === item.path) void queryClient.refetchQueries({ type: 'active' }, { cancelRefetch: false }); }}
+          onClick={() => setMobileMenuOpen(false)}
         />
       )}
     </div>
