@@ -14,6 +14,10 @@ install -m 0644 "$package_dir/vmalpha-manager.service" "$package_dir/vmalpha-man
 mkdir -p /opt/vmalpha-manager/web /etc/nginx/conf.d /etc/systemd/system/nginx.service.d
 cp -a "$package_dir/dist" /opt/vmalpha-manager/web/
 chown -R root:root /opt/vmalpha-manager
+# The Manager service runs as vmalpha with ProtectSystem=strict. Keep the
+# application tree immutable, but provide one private directory for verified
+# runtime state such as the Ceph backend registration manifest.
+install -d -o vmalpha -g vmalpha -m 0700 /opt/vmalpha-manager/data
 install -m 0644 "$package_dir/nginx.conf" /etc/nginx/conf.d/vmalpha-manager.conf
 cat >/etc/nginx/nginx.conf <<'EOF'
 user nginx;
