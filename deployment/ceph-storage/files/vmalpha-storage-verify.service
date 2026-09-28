@@ -1,0 +1,8 @@
+[Unit]
+Description=Verify VM Alpha shared storage client access
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vmalpha-storage-verify-all
+TimeoutStartSec=360
+UMask=0077

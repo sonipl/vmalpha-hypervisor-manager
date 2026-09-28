@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh verified VM Alpha storage registration evidence
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+Persistent=true
+[Install]
+WantedBy=timers.target

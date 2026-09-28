@@ -83,6 +83,15 @@ def audit(op,status,detail='',target='Host',started=None):
  tmp=STATE/('tasks-'+str(uuid.uuid4())+'.tmp');tmp.write_text(json.dumps(old[-100:]));tmp.chmod(0o600);tmp.replace(f)
  run('logger','-t','vmalpha-hostclient',f'{row["user"]} {op} {status}',check=False)
 def ceph_telemetry(args):
+ if args == {'query':'storage registration'}:
+  import stat
+  p=pathlib.Path('/var/lib/vmalpha/storage-registration.json')
+  st=p.lstat()
+  if not stat.S_ISREG(st.st_mode) or st.st_uid!=0 or stat.S_IMODE(st.st_mode)!=0o600 or st.st_size>65536:raise ValueError('Storage manifest unavailable')
+  data=json.loads(p.read_text())
+  allowed={'version','status','verified_at','fsid','monitors','placement_nodes','rbd_pool','cephfs','nfs','checks','host_access'}
+  if not isinstance(data,dict) or set(data)-allowed:raise ValueError('Invalid storage manifest')
+  return data
  commands={'status':['status'], 'df':['df'], 'osd perf':['osd','perf'], 'orch host ls':['orch','host','ls'], 'osd tree':['osd','tree']}
  query=args.get('query')
  if set(args)!={'query'} or query not in commands:raise ValueError('Unsupported Ceph telemetry query')

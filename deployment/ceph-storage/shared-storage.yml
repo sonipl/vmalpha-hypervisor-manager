@@ -1,0 +1,93 @@
+---
+- name: Provision explicitly requested Ceph shared storage
+  hosts: kvm11
+  become: true
+  tasks:
+    - name: Validate opt-in and selected nodes
+      ansible.builtin.assert:
+        that:
+          - vmalpha_enable_ceph | default(false) | bool
+          - vmalpha_enable_shared_storage | default(false) | bool
+          - ceph_storage_hosts | length == 3
+          - ceph_storage_clients | length == 3
+          - ceph_nfs_vip | length > 0
+          - ceph_nfs_vip_allocation_verified | default(false) | bool
+        fail_msg: Explicit Ceph and shared-storage opt-in plus three host names and client IPs are required.
+    - name: Install bounded storage provisioning workflow
+      ansible.builtin.copy:
+        src: files/provision-ceph-storage.py
+        dest: /usr/local/sbin/vmalpha-provision-ceph-storage
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Write selected storage settings
+      ansible.builtin.copy:
+        content: "{{ {'enabled': true, 'hosts': ceph_storage_hosts, 'clients': ceph_storage_clients, 'nfs_vip': ceph_nfs_vip, 'vip_allocation_verified': ceph_nfs_vip_allocation_verified} | to_nice_json }}"
+        dest: /run/vmalpha-shared-storage.json
+        mode: '0600'
+    - name: Configure named pools and services without touching OSD devices
+      ansible.builtin.command: /usr/local/sbin/vmalpha-provision-ceph-storage /run/vmalpha-shared-storage.json
+      register: storage_configuration
+      changed_when: "'Configuration submitted' in storage_configuration.stdout"
+    - name: Create pool-scoped RBD client
+      ansible.builtin.command: ceph auth get-or-create client.vmalpha-storage mon 'profile rbd' osd 'profile rbd pool=vmalpha-rbd' mgr 'profile rbd pool=vmalpha-rbd'
+      register: rbd_client_key
+      no_log: true
+      changed_when: false
+    - name: Read minimal Ceph configuration
+      ansible.builtin.command: ceph config generate-minimal-conf
+      register: ceph_client_config
+      changed_when: false
+    - name: Install protected client directories
+      ansible.builtin.file:
+        path: "{{ item.1 }}"
+        state: directory
+        mode: '0755'
+      delegate_to: "{{ item.0 }}"
+      loop: "{{ groups['vmalpha_cluster'] | product(['/etc/ceph', '/etc/vmalpha']) | list }}"
+    - name: Install scoped RBD credentials on selected clients
+      ansible.builtin.copy:
+        content: "{{ rbd_client_key.stdout }}"
+        dest: /etc/ceph/ceph.client.vmalpha-storage.keyring
+        mode: '0600'
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vmalpha_cluster'] }}"
+      no_log: true
+    - name: Install minimal client configuration
+      ansible.builtin.copy:
+        content: "{{ ceph_client_config.stdout }}"
+        dest: /etc/ceph/vmalpha-storage.conf
+        mode: '0600'
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vmalpha_cluster'] }}"
+    - name: Persist selected workflow settings
+      ansible.builtin.copy:
+        content: "{{ {'hosts': ceph_storage_hosts, 'clients': ceph_storage_clients, 'nfs_vip': ceph_nfs_vip} | to_nice_json }}"
+        dest: /etc/vmalpha/storage-workflow.json
+        mode: '0600'
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vmalpha_cluster'] }}"
+    - name: Install per-client disposable verification
+      ansible.builtin.copy:
+        src: files/verify-ceph-storage-client.sh
+        dest: /usr/local/sbin/vmalpha-storage-verify-client
+        mode: '0700'
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vmalpha_cluster'] }}"
+    - name: Install aggregate verification
+      ansible.builtin.copy:
+        src: files/verify-ceph-storage-all.py
+        dest: /usr/local/sbin/vmalpha-storage-verify-all
+        mode: '0700'
+    - name: Install verification service and timer
+      ansible.builtin.copy:
+        src: "files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: '0644'
+      loop: [vmalpha-storage-verify.service, vmalpha-storage-verify.timer]
+    - name: Enable evidence refresh after ingress is running
+      ansible.builtin.systemd:
+        name: vmalpha-storage-verify.timer
+        enabled: true
+        state: started
+        daemon_reload: true
