@@ -104,6 +104,8 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 		// ── Storage ──
 		storage := auth.Group("/storage")
 		{
+			storage.GET("/templates", middleware.RBACMiddleware("templates", "list"), storageBackendsHandler.ListTemplates)
+			storage.POST("/templates/import", middleware.RBACMiddleware("storage", "create"), storageBackendsHandler.RegisterDatastoreTemplate)
 			storage.GET("/ceph/health", middleware.RBACMiddleware("storage", "list"), cephMetricsHandler.GetHealth)
 			storage.GET("/ceph/metrics", middleware.RBACMiddleware("storage", "list"), cephMetricsHandler.GetMetrics)
 			storage.GET("/classes", middleware.RBACMiddleware("storage", "list"), storageBackendsHandler.ListClasses)

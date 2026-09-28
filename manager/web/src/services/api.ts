@@ -20,6 +20,7 @@ import type {
   AuditLog,
   DashboardMetrics,
   VMSnapshot,
+  VMTemplate,
 } from '@/types';
 
 const api = axios.create({
@@ -67,6 +68,10 @@ export const vmAPI = {
   delete: (id: string) => api.delete(`/vms/${id}`),
   action: (id: string, action: string, data?: Record<string, unknown>) =>
     api.post(`/vms/${id}/actions/${action}`, data),
+};
+
+export const templateAPI = {
+  list: () => api.get<{ data: VMTemplate[]; items: VMTemplate[]; total: number }>('/storage/templates'),
 };
 
 // ── Hosts & Clusters ──

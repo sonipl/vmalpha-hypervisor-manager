@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { networkAPI, storageAPI, vmAPI } from '@/services/api';
-import type { Network, StorageClass } from '@/types';
+import { networkAPI, storageAPI, templateAPI, vmAPI } from '@/services/api';
+import type { Network, StorageClass, VMTemplate } from '@/types';
 import { ArrowLeft, Plus, Trash2, HardDrive, Network as NetworkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,6 +19,7 @@ export default function VMCreatePage() {
   const [loading, setLoading] = useState(false);
   const [networks, setNetworks] = useState<Network[]>([]);
   const [storageClasses, setStorageClasses] = useState<StorageClass[]>([]);
+  const [templates, setTemplates] = useState<VMTemplate[]>([]);
 
   const [form, setForm] = useState({
     name: '',
@@ -26,6 +27,7 @@ export default function VMCreatePage() {
     os_type: 'Ubuntu 22.04',
     vcpus: 2,
     memory_mb: 4096,
+    template_id: '',
   });
 
   const [disks, setDisks] = useState<DiskEntry[]>([
@@ -40,9 +42,10 @@ export default function VMCreatePage() {
     let cancelled = false;
     (async () => {
       try {
-        const [netRes, scRes] = await Promise.all([
+        const [netRes, scRes, templateRes] = await Promise.all([
           networkAPI.list({ per_page: 100 }),
           storageAPI.listClasses(),
+          templateAPI.list(),
         ]);
         if (cancelled) return;
         const nets = (netRes.data as { data?: Network[] }).data ?? (netRes.data as unknown as Network[]) ?? [];
@@ -51,6 +54,7 @@ export default function VMCreatePage() {
           : ((scRes.data as { data?: StorageClass[] }).data ?? []);
         setNetworks(nets);
         setStorageClasses(classes);
+        setTemplates(templateRes.data.data ?? templateRes.data.items ?? []);
 
         const preferred =
           nets.find((n) => (n.subnet || '').startsWith('10.0.10.') || n.name.includes('10.0.10')) ||
@@ -92,6 +96,7 @@ export default function VMCreatePage() {
         os_version,
         vcpus: form.vcpus,
         memory_mb: form.memory_mb,
+        ...(form.template_id ? { template_id: form.template_id } : {}),
         disks: disks.map((d) => ({
           name: d.name,
           size_gb: d.size_gb,
@@ -153,6 +158,15 @@ export default function VMCreatePage() {
               <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="vm-web-01"
                 className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-nova-400 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Boot template</label>
+              <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-nova-400 focus:outline-none">
+                <option value="">No catalog template</option>
+                {templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.disk_gb} GB</option>)}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Templates are verified QCOW2 images in an External NFS datastore.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Operating System</label>
