@@ -1,0 +1,9 @@
+# Manager only. Endpoint must match its verified Ceph NFS registration.
+# Authorize the Manager client on the existing Ceph NFS export separately.
+external_nfs:
+  enabled: true
+  id: ceph-vmalpha-nfs
+  server: 192.168.71.84
+  export: /vmalpha
+  version: '4.1'
+  manager_browser: true

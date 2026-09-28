@@ -84,7 +84,26 @@ func saveStorageConfig(cfg storageConfigFile) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0600)
+	f, err := os.CreateTemp(filepath.Dir(path), ".storage-*.json")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	defer os.Remove(name)
+	if err = f.Chmod(0600); err == nil {
+		_, err = f.Write(b)
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(name, path)
 }
 
 func sanitizeStorageClass(name string) string {
@@ -275,6 +294,9 @@ func nativeBackendStatus(b StorageBackend) (string, int64, string) {
 }
 
 func probeBackendStatus(b StorageBackend) (string, int64, string) {
+	if externalNativeBackend(b) {
+		return externalBackendStatus(b)
+	}
 	if nativeManagedBackend(b) {
 		return nativeBackendStatus(b)
 	}
@@ -351,6 +373,9 @@ func (h *StorageBackendsHandler) ListClasses(c *gin.Context) {
 }
 
 func backendProvisioner(b StorageBackend) string {
+	if externalNativeBackend(b) {
+		return "vmalpha.io/external-nfs"
+	}
 	if nativeManagedBackend(b) {
 		switch b.Type {
 		case "ceph":
@@ -1025,12 +1050,12 @@ func unmountBackend(b StorageBackend) error {
 }
 
 func rejectNativeManagedMutation(c *gin.Context, b StorageBackend) bool {
-	if !nativeManagedBackend(b) {
+	if !nativeManagedBackend(b) && !externalNativeBackend(b) {
 		return false
 	}
 	c.JSON(http.StatusConflict, gin.H{
-		"error":   "native-managed backend is controlled by verified Ceph registration",
-		"message": "Refresh the protected Ceph registration manifest after a verified backend operation.",
+		"error":   "managed backend mount changes require its deployment workflow",
+		"message": "Use the appropriate Ceph or external NFS workflow; this endpoint does not change managed mounts.",
 	})
 	return true
 }

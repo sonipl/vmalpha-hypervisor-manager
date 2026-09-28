@@ -126,6 +126,8 @@ func (h *StorageBackendsHandler) RefreshNativeRegistration(ctx context.Context, 
 		return err
 	}
 	backends := nativeBackends(manifest, time.Now().UTC())
+	storageRegistrationMu.Lock()
+	defer storageRegistrationMu.Unlock()
 	cfg := loadStorageConfig()
 	preserved := make([]StorageBackend, 0, len(cfg.Backends))
 	for _, backend := range cfg.Backends {

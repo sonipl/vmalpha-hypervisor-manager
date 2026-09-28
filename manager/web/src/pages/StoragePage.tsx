@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import DatastoreBrowser from '@/components/DatastoreBrowser';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Area,
@@ -13,7 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import toast from 'react-hot-toast';
-import { storageAPI } from '@/services/api';
+import api, { storageAPI } from '@/services/api';
 import DataTable, { Column } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import MetricCard from '@/components/common/MetricCard';
@@ -334,6 +335,7 @@ function AddStorageModal({
 }
 
 export default function StoragePage() {
+ const [browserBackend,setBrowserBackend]=useState<StorageBackend|null>(null);
   const qc = useQueryClient();
   const [tab, setTab] = useState<'cluster' | 'backends' | 'volumes' | 'classes' | 'snapshots'>('backends');
   const [range, setRange] = useState<'15m' | '1h' | '6h' | '24h' | '7d'>('1h');
@@ -480,7 +482,9 @@ export default function StoragePage() {
       key: 'actions', label: '', width: '120px',
       render: (b) => (
         <div className="flex items-center gap-1">
-          {b.type !== 'ceph' && !b.config?.native_managed && (
+          {b.config?.external_native === true && <button className="btn-ghost" onClick={async()=>{try{await api.post('/storage/external-nfs',{id:b.config?.datastore_id,name:b.name,server:b.config?.server,export_path:b.config?.export_path,hosts:b.config?.hosts});await refetchClasses();toast.success('Hypervisor NFS mounts verified');}catch(e:any){toast.error(e.response?.data?.error||'Mount verification failed');}}}>Verify mounts</button>}
+          {b.type === "nfs" && (b.config?.external_native || b.config?.native_managed) ? <button className="btn-ghost" onClick={()=>setBrowserBackend(b)}>Browse</button> : <span className="text-xs text-gray-400" title="Folder browsing requires a Manager-mounted NFS datastore">Browse unsupported</span>}
+          {b.type !== 'ceph' && !b.config?.native_managed && !b.config?.external_native && (
             <>
               {(b.status === 'unmounted' || b.status === 'offline' || b.status === 'error') && (
                 <button
@@ -577,6 +581,7 @@ export default function StoragePage() {
         </div>
       </div>
 
+      {browserBackend && <DatastoreBrowser backend={browserBackend} close={()=>setBrowserBackend(null)} />}
       {tab === 'backends' && (
         <DataTable
           columns={backendColumns}

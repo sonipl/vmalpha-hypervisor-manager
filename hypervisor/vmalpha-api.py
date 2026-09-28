@@ -106,6 +106,16 @@ def ceph_telemetry(args):
  if not isinstance(result,(dict,list)):raise ValueError('Invalid Ceph telemetry')
  return result
 
+def external_nfs_status(args):
+ ident=args.get('id','')
+ if set(args)!={'id'} or not re.fullmatch(r'[a-z][a-z0-9-]{0,40}',ident):raise ValueError('Invalid datastore ID')
+ target='/var/lib/vmalpha/datastores/'+ident
+ data=json.loads(run('findmnt','-J','-M',target,'-o','SOURCE,FSTYPE,OPTIONS',timeout=10))['filesystems'][0]
+ opts=set(data.get('options','').split(','))
+ unit=run('systemd-escape','--path','--suffix=automount',target)
+ if data.get('fstype')!='nfs' or not {'vers=3','soft'}<=opts or run('systemctl','is-active',unit)!='active':raise ValueError('NFSv3 soft automount is not active')
+ return {'id':ident,'source':data['source'],'mount_path':target,'options':sorted(opts),'automount':True,'observed_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+
 def main(q):
  op=q.get('op','');args=q.get('args',{})
  if op=='metrics':return monitoring_handle(args)
@@ -117,6 +127,7 @@ def main(q):
  if op in SECURITY_OPS:return security_handle(op,args,run,STATE,name,number)
  if op in DATASTORE_OPS:return datastore_handle(op,args,ROOT,STATE,run,vms,pools)
  if op=='ceph.telemetry':return ceph_telemetry(args)
+ if op=='storage.external-nfs.status':return external_nfs_status(args)
  if op=='inventory':return inventory()
  if op=='security':return security()
  if op=='tasks':return tasks()
@@ -269,13 +280,13 @@ if __name__=='__main__':
   q=json.loads(raw)
   if not isinstance(q,dict):raise ValueError('Invalid request')
   if os.geteuid()!=0:raise ValueError('Administrative access is required')
-  if q.get('op') not in ('ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ):
+  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ):
    STATE.mkdir(exist_ok=True);lock=open(STATE/'operations.lock','a');fcntl.flock(lock,fcntl.LOCK_EX)
   access.authorize(q)
   result=access.filter_result(q.get('op'),main(q))
-  if q.get('op') not in ('ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(q['op'],'Completed',target=str(q.get('args',{}).get('name') or pathlib.Path(q.get('args',{}).get('path','Host')).name)[:120],started=started)
+  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(q['op'],'Completed',target=str(q.get('args',{}).get('name') or pathlib.Path(q.get('args',{}).get('path','Host')).name)[:120],started=started)
   print(json.dumps(dict(ok=True,result=result)))
  except Exception as e:
-  if q.get('op') not in ('ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(str(q.get('op','invalid')),'Failed',started=started)
+  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(str(q.get('op','invalid')),'Failed',started=started)
   print(json.dumps(dict(ok=False,error=str(e))))
   sys.exit(1)

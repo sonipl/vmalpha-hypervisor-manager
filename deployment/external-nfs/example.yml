@@ -1,0 +1,7 @@
+# Explicit opt-in. Replace inventory host names and server/export for your site.
+external_nfs:
+  enabled: true
+  id: external-nfs
+  server: 192.168.71.50
+  export: /nfs
+  version: '3'

@@ -1,0 +1,51 @@
+---
+- name: Configure explicitly selected external NFS datastore
+  hosts: external_nfs_hosts
+  become: true
+  tasks:
+    - name: Require explicit opt-in
+      ansible.builtin.assert:
+        that:
+          - external_nfs.enabled | default(false) | bool
+          - external_nfs.id is defined
+          - external_nfs.server is defined
+          - external_nfs.export is defined
+    - name: Install NFS client package
+      ansible.builtin.package:
+        name: nfs-utils
+        state: present
+    - name: Install safe NFS automount installer
+      ansible.builtin.copy:
+        src: files/configure-external-nfs.py
+        dest: /usr/local/sbin/vmalpha-configure-external-nfs
+        mode: '0700'
+    - name: Stage selected configuration
+      ansible.builtin.copy:
+        content: '{{ external_nfs | to_nice_json }}'
+        dest: /run/vmalpha-external-nfs.json
+        mode: '0600'
+    - name: Configure and verify NFSv3 soft automount
+      ansible.builtin.command: /usr/local/sbin/vmalpha-configure-external-nfs /run/vmalpha-external-nfs.json
+      register: external_nfs_result
+      changed_when: false
+    - name: Create Manager service override directory when browser access is selected
+      ansible.builtin.file:
+        path: /etc/systemd/system/vmalpha-manager.service.d
+        state: directory
+        mode: '0755'
+      when: external_nfs.manager_browser | default(false) | bool
+    - name: Permit Manager writes only to this explicitly selected datastore
+      ansible.builtin.copy:
+        dest: '/etc/systemd/system/vmalpha-manager.service.d/nfs-{{ external_nfs.id }}.conf'
+        content: |
+          [Service]
+          ReadWritePaths=/var/lib/vmalpha/datastores/{{ external_nfs.id }}
+        mode: '0644'
+      when: external_nfs.manager_browser | default(false) | bool
+      notify: Restart Manager for selected datastore access
+  handlers:
+    - name: Restart Manager for selected datastore access
+      ansible.builtin.systemd_service:
+        name: vmalpha-manager.service
+        daemon_reload: true
+        state: restarted
