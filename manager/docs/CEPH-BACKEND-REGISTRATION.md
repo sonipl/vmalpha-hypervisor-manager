@@ -49,12 +49,13 @@ workflow and are never copied into Manager state.
 
 ## Refresh automation
 
-The appliance installs and enables `vmalpha-ceph-backend-registration.timer`.
-Every five minutes it applies `/var/lib/vmalpha/storage-registration.json` only
-when that file exists and passes all ownership, mode, freshness, endpoint, and
-per-host evidence checks. The Ceph controller must refresh this root-owned
-`0600` file at least every ten minutes after a successful initial RBD/NFS
-read/write verification; a refresh may use bounded live connectivity/read-state
-checks rather than destructive writes. If refresh stops, Manager automatically
-shows the backends as `unknown` after 15 minutes instead of retaining an old
+Manager refreshes through the existing pinned native-host broker every five
+minutes. It requests only the allowlisted `ceph.telemetry` / `storage
+registration` result from kvm11; the Manager service writes its own protected
+state under `/opt/vmalpha-manager/data` and never needs write access to a
+root-owned host path. The Ceph verifier must preserve its real `verified_at`
+time and refresh its evidence after a successful initial RBD/NFS read/write
+verification. A broker failure, stale evidence, or invalid manifest does not
+overwrite the prior state. Its original verification timestamp makes Manager
+show the backends as `unknown` after 15 minutes instead of retaining an old
 `online` result.

@@ -33,6 +33,8 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 	hostHandler.Native = nativeHandler
 	storageHandler := handlers.NewStorageHandler(db, log)
 	storageBackendsHandler := handlers.NewStorageBackendsHandler(db, log)
+	storageBackendsHandler.Native = nativeHandler
+	storageBackendsHandler.StartNativeRegistrationRefresh("kvm11")
 	networkHandler := handlers.NewNetworkHandler(db, log)
 	authHandler := handlers.NewAuthHandler(db, log, cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	aiHandler := handlers.NewAIHandler(db, log)

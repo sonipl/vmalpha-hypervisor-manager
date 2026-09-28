@@ -17,7 +17,8 @@ import (
 	"gorm.io/gorm"
 )
 
-const storageConfigPath = "/opt/vmalpha-manager/data/storage.json"
+var storageConfigPath = "/opt/vmalpha-manager/data/storage.json"
+
 const legacyStorageConfigPath = "/var/lib/novasphere/config/storage.json"
 
 const nativeBackendVerificationTTL = 15 * time.Minute
@@ -41,8 +42,9 @@ type storageConfigFile struct {
 }
 
 type StorageBackendsHandler struct {
-	DB  *gorm.DB
-	Log *logrus.Logger
+	DB     *gorm.DB
+	Log    *logrus.Logger
+	Native *NativeHandler
 }
 
 func NewStorageBackendsHandler(db *gorm.DB, log *logrus.Logger) *StorageBackendsHandler {
