@@ -17,7 +17,10 @@ Release key fingerprint: 21CB256AE16FC54C6E652949702D426D350D275D.
 Source: https://download.rockylinux.org/pub/rocky/9/images/x86_64/
 
 Build in a separate guest with a new disk. Install a supported PostgreSQL module,
-nginx, firewalld, Python 3, OpenSSL and SELinux management tools. Build the Go API
+nginx, firewalld, Python 3, OpenSSL, SELinux management tools, and `qemu-img`.
+`qemu-img` is required by the External NFS template catalog to verify QCOW2
+format, virtual size, and the absence of a backing-file chain before catalog
+metadata is registered. Build the Go API
 for linux/amd64 with CGO disabled and build the frontend after type checking.
 Package those outputs alongside these scripts. install.sh only installs the
 application and enables first-boot services; it must not initialize the image's

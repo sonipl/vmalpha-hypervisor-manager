@@ -6,6 +6,9 @@ test -f /var/lib/vmalpha-manager-build-ready
 test ! -e /var/lib/pgsql/data/PG_VERSION
 test ! -e /var/lib/vmalpha-manager/initialized
 package_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+# The template catalog verifies QCOW2 metadata on an inherited descriptor; do
+# not register an image when qemu-img is unavailable.
+command -v qemu-img >/dev/null 2>&1 || dnf -y install qemu-img
 getent passwd vmalpha >/dev/null || useradd --system --home-dir /opt/vmalpha-manager --shell /sbin/nologin vmalpha
 install -m 0755 "$package_dir/vmalpha-manager" /usr/local/bin/vmalpha-manager
 install -m 0755 "$package_dir/firstboot.py" /usr/libexec/vmalpha-manager-firstboot
