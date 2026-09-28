@@ -15,7 +15,11 @@ def configure(c):
  target=validate(c);source=c['server']+':'+c['export'];p=pathlib.Path(target);version=str(c.get('version','3'))
  if any(v.is_symlink() for v in (p,*p.parents)):raise ValueError('Symlink mount targets refused')
  existing=subprocess.run(['findmnt','-rn','-M',target,'-o','SOURCE,FSTYPE'],capture_output=True,text=True).stdout.strip()
- if existing and existing.split() not in ([source,'nfs'],[source,'nfs4'],['systemd-1','autofs']):raise ValueError('Existing mount conflicts')
+ # With an active systemd automount, findmnt reports both the autofs trigger
+ # and the NFS filesystem. Treat that exact pair as the expected state.
+ existing_rows=[line.split() for line in existing.splitlines() if line.strip()]
+ allowed=([source,'nfs'],[source,'nfs4'],['systemd-1','autofs'])
+ if existing_rows and any(row not in allowed for row in existing_rows):raise ValueError('Existing mount conflicts')
  if p.exists() and not existing and any(p.iterdir()):raise ValueError('Mount target must be empty')
  fstab=pathlib.Path('/etc/fstab');text=fstab.read_text();marker='# VMALPHA external-nfs '+c['id']
  lines=text.splitlines();desired=source+' '+target+' nfs vers='+version+',soft,nofail,_netdev,x-systemd.automount,x-systemd.mount-timeout=30s 0 0'
