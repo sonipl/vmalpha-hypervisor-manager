@@ -52,8 +52,8 @@ export default function DashboardPage() {
           subtitle={metrics ? `${metrics.vms.running} running` : 'Unavailable'} icon={Monitor} color="nova" />
         <MetricCard title="Hosts" value={metrics?.hosts.total ?? '—'}
           subtitle={metrics ? `${metrics.hosts.ready} ready in inventory` : 'Unavailable'} icon={Server} color="blue" />
-        <MetricCard title="Cluster Health" value={metrics?.cluster_health ?? 'Unknown'}
-          subtitle={metrics?.cluster_health === "Healthy" ? "Live host and Ceph checks passed" : metrics?.cluster_health_scope ?? "Live cluster health is unavailable"} icon={Activity} color={healthTone} statusTone={healthTone} />
+        <MetricCard title="Cluster Health" value={metricsQuery.isPending ? 'Checking…' : metricsQuery.isError ? 'Unavailable' : metrics?.cluster_health ?? 'Unknown'}
+          subtitle={metricsQuery.isPending ? "Reading live host and Ceph health" : metricsQuery.isError ? "Health request failed; retrying on refresh" : metrics?.cluster_health === "Healthy" ? "Live host and Ceph checks passed" : metrics?.cluster_health_scope ?? "Live cluster health is unavailable"} icon={Activity} color={healthTone} statusTone={healthTone} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-5">
