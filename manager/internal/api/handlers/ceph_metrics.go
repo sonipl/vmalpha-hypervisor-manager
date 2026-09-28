@@ -3,8 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -21,86 +19,16 @@ type CephMetricsHandler struct {
 	Log    *logrus.Logger
 	once   sync.Once
 	stopCh chan struct{}
+	native *NativeHandler
 }
 
 func NewCephMetricsHandler(db *gorm.DB, log *logrus.Logger) *CephMetricsHandler {
-	h := &CephMetricsHandler{DB: db, Log: log, stopCh: make(chan struct{})}
+	return NewCephMetricsHandlerWithNative(db, log, nil)
+}
+func NewCephMetricsHandlerWithNative(db *gorm.DB, log *logrus.Logger, native *NativeHandler) *CephMetricsHandler {
+	h := &CephMetricsHandler{DB: db, Log: log, native: native, stopCh: make(chan struct{})}
 	h.once.Do(func() { go h.samplerLoop() })
 	return h
-}
-
-func cephBin(name string) string {
-	for _, p := range []string{
-		"/host/sbin/" + name,
-		"/host/bin/" + name,
-		"/usr/sbin/" + name,
-		"/usr/bin/" + name,
-	} {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return name
-}
-
-func cephCacheDir() string {
-	for _, d := range []string{"/var/lib/novasphere/ceph", "/host/var/lib/novasphere/ceph"} {
-		if st, err := os.Stat(d); err == nil && st.IsDir() {
-			return d
-		}
-	}
-	return ""
-}
-
-func readCephCache(name string) ([]byte, error) {
-	dir := cephCacheDir()
-	if dir == "" {
-		return nil, os.ErrNotExist
-	}
-	return os.ReadFile(dir + "/" + name)
-}
-
-// runCeph prefers host-side JSON samples (Alpine API cannot exec glibc cephadm),
-// then falls back to ceph/cephadm CLI when available.
-func runCeph(args ...string) ([]byte, error) {
-	joined := strings.Join(args, " ")
-	switch {
-	case strings.HasPrefix(joined, "-s") || strings.Contains(joined, "status"):
-		if b, err := readCephCache("status.json"); err == nil && len(b) > 0 {
-			return b, nil
-		}
-	case strings.HasPrefix(joined, "df"):
-		if b, err := readCephCache("df.json"); err == nil && len(b) > 0 {
-			return b, nil
-		}
-	case strings.Contains(joined, "osd perf"):
-		if b, err := readCephCache("osd_perf.json"); err == nil && len(b) > 0 {
-			return b, nil
-		}
-	case strings.Contains(joined, "orch host ls"):
-		if b, err := readCephCache("hosts.json"); err == nil && len(b) > 0 {
-			return b, nil
-		}
-	case strings.Contains(joined, "osd tree"):
-		if b, err := readCephCache("osd_tree.json"); err == nil && len(b) > 0 {
-			return b, nil
-		}
-	}
-
-	env := append(os.Environ(),
-		"KUBECONFIG=/etc/kubernetes/admin.conf",
-		"PATH=/usr/sbin:/usr/bin:/sbin:/bin",
-	)
-	cmd := exec.Command(cephBin("ceph"), args...)
-	cmd.Env = env
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return out, nil
-	}
-	cargs := append([]string{"shell", "--", "ceph"}, args...)
-	cmd2 := exec.Command(cephBin("cephadm"), cargs...)
-	cmd2.Env = env
-	return cmd2.CombinedOutput()
 }
 
 type cephStatusJSON struct {
@@ -132,13 +60,13 @@ type cephDFJSON struct {
 }
 
 func (h *CephMetricsHandler) sampleOnce() {
-	out, err := runCeph("-s", "--format", "json")
+	out, err := h.runCeph("-s", "--format", "json")
 	if err != nil {
 		h.Log.Debugf("ceph sample skipped: %v (%s)", err, strings.TrimSpace(string(out)))
 		return
 	}
 	var st cephStatusJSON
-	if json.Unmarshal(out, &st) != nil {
+	if json.Unmarshal(out, &st) != nil || !validCephHealth(st.Health.Status) {
 		return
 	}
 	sample := models.CephMetricSample{
@@ -154,7 +82,7 @@ func (h *CephMetricsHandler) sampleOnce() {
 		WriteIOPS:  st.PGMap.WriteOpPerSec,
 		RawJSON:    string(out),
 	}
-	if dfOut, err := runCeph("df", "--format", "json"); err == nil {
+	if dfOut, err := h.runCeph("df", "--format", "json"); err == nil {
 		var df cephDFJSON
 		if json.Unmarshal(dfOut, &df) == nil && df.Stats.TotalBytes > 0 {
 			sample.TotalBytes = df.Stats.TotalBytes
@@ -162,7 +90,7 @@ func (h *CephMetricsHandler) sampleOnce() {
 			sample.AvailBytes = df.Stats.TotalAvailBytes
 		}
 	}
-	if perfOut, err := runCeph("osd", "perf", "--format", "json"); err == nil {
+	if perfOut, err := h.runCeph("osd", "perf", "--format", "json"); err == nil {
 		var perf struct {
 			OSDPerfInfos []struct {
 				PerfStats struct {
@@ -182,7 +110,7 @@ func (h *CephMetricsHandler) sampleOnce() {
 			sample.ReadLatencyMs = sumC / n
 		}
 	}
-	if hostsOut, err := runCeph("orch", "host", "ls", "--format", "json"); err == nil {
+	if hostsOut, err := h.runCeph("orch", "host", "ls", "--format", "json"); err == nil {
 		var hosts []any
 		if json.Unmarshal(hostsOut, &hosts) == nil {
 			sample.NumHosts = len(hosts)
@@ -211,7 +139,7 @@ func (h *CephMetricsHandler) samplerLoop() {
 
 // GET /api/v1/storage/ceph/health
 func (h *CephMetricsHandler) GetHealth(c *gin.Context) {
-	out, err := runCeph("-s", "--format", "json")
+	out, err := h.runCeph("-s", "--format", "json")
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"available": false,
@@ -228,13 +156,17 @@ func (h *CephMetricsHandler) GetHealth(c *gin.Context) {
 			health = s
 		}
 	}
-	dfOut, _ := runCeph("df", "--format", "json")
+	if !validCephHealth(health) {
+		c.JSON(http.StatusOK, gin.H{"available": false, "health": "UNKNOWN"})
+		return
+	}
+	dfOut, _ := h.runCeph("df", "--format", "json")
 	var df any
 	_ = json.Unmarshal(dfOut, &df)
-	hostsOut, _ := runCeph("orch", "host", "ls", "--format", "json")
+	hostsOut, _ := h.runCeph("orch", "host", "ls", "--format", "json")
 	var hosts any
 	_ = json.Unmarshal(hostsOut, &hosts)
-	osdOut, _ := runCeph("osd", "tree", "--format", "json")
+	osdOut, _ := h.runCeph("osd", "tree", "--format", "json")
 	var osdTree any
 	_ = json.Unmarshal(osdOut, &osdTree)
 
@@ -268,9 +200,9 @@ func (h *CephMetricsHandler) GetMetrics(c *gin.Context) {
 	h.DB.Where("created_at >= ?", since).Order("created_at asc").Find(&samples)
 
 	live := gin.H{"available": false}
-	if out, err := runCeph("-s", "--format", "json"); err == nil {
+	if out, err := h.runCeph("-s", "--format", "json"); err == nil {
 		var st cephStatusJSON
-		if json.Unmarshal(out, &st) == nil {
+		if json.Unmarshal(out, &st) == nil && validCephHealth(st.Health.Status) {
 			live = gin.H{
 				"available":       true,
 				"health":          st.Health.Status,
