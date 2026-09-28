@@ -79,6 +79,30 @@ func (h *NativeHandler) LiveInventory(ctx context.Context, name string) (nativeH
 	return inventory, nil
 }
 
+// StorageRegistration reads the sanitized Ceph registration state through an
+// enrolled broker. The hypervisor broker allowlists this query; it does not
+// provide an arbitrary remote-file interface. Callers must still validate the
+// manifest's ownership-independent schema, freshness, and host evidence before
+// publishing any backend as usable.
+func (h *NativeHandler) StorageRegistration(ctx context.Context, name string) (json.RawMessage, error) {
+	cfg, ok := h.Hosts[name]
+	if !ok {
+		return nil, fmt.Errorf("host is not enrolled")
+	}
+	broker, err := h.Connect(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("host enrollment is unavailable")
+	}
+	result, err := broker.Call(ctx, nativehost.Request{Operation: "ceph.telemetry", Arguments: map[string]any{"query": "storage registration"}})
+	if err != nil {
+		return nil, fmt.Errorf("Ceph storage registration unavailable")
+	}
+	if !json.Valid(result) {
+		return nil, fmt.Errorf("invalid Ceph storage registration")
+	}
+	return result, nil
+}
+
 func (h *NativeHandler) List(c *gin.Context) {
 	names := make([]string, 0, len(h.Hosts))
 	for name := range h.Hosts {

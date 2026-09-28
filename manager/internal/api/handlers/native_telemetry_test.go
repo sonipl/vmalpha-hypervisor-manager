@@ -81,3 +81,17 @@ func TestLiveInventoryRequiresVerifiedFacts(t *testing.T) {
 		t.Fatal("accepted incomplete inventory")
 	}
 }
+
+func TestStorageRegistrationUsesOnlyAllowlistedBrokerQuery(t *testing.T) {
+	h := NewNativeHandler(nil, map[string]config.NativeHostConfig{"kvm11": {Address: "192.0.2.11:22"}})
+	h.Connect = func(config.NativeHostConfig) (nativeBroker, error) {
+		return sampleBroker{`{"version":1,"status":"verified"}`}, nil
+	}
+	raw, err := h.StorageRegistration(context.Background(), "kvm11")
+	if err != nil || !json.Valid(raw) {
+		t.Fatalf("unexpected registration result: %s, %v", raw, err)
+	}
+	if _, err := h.StorageRegistration(context.Background(), "missing"); err == nil {
+		t.Fatal("accepted an unenrolled host")
+	}
+}
