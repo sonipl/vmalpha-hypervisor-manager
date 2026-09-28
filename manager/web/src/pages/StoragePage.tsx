@@ -344,7 +344,7 @@ export default function StoragePage() {
     queryFn: () => storageAPI.listVolumes().then((r) => r.data),
   });
 
-  const { data: classesResp, refetch: refetchClasses } = useQuery({
+  const { data: classesResp, refetch: refetchClasses, isPending: backendsLoading, isError: backendsError } = useQuery({
     queryKey: ['storage-classes'],
     queryFn: () => storageAPI.listClassesWithBackends().then((r) => r.data),
   });
@@ -580,8 +580,9 @@ export default function StoragePage() {
       {tab === 'backends' && (
         <DataTable
           columns={backendColumns}
-          data={backends}
-          emptyMessage="No storage backends registered — click Add Storage"
+          data={backendsError ? [] : backends}
+          loading={backendsLoading}
+          emptyMessage={backendsError ? "Storage backend inventory unavailable — retry refresh" : "No storage backends registered — click Add Storage"}
         />
       )}
 
