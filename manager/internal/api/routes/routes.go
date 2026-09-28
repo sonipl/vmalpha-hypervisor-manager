@@ -30,6 +30,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 	vmHandler := handlers.NewVMHandler(db, hub, log)
 	hostHandler := handlers.NewHostHandler(db, hub, log)
 	nativeHandler := handlers.NewNativeHandler(db, cfg.NativeHosts)
+	hostHandler.Native = nativeHandler
 	storageHandler := handlers.NewStorageHandler(db, log)
 	storageBackendsHandler := handlers.NewStorageBackendsHandler(db, log)
 	networkHandler := handlers.NewNetworkHandler(db, log)
@@ -39,7 +40,8 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 	monitoringHandler.Native = nativeHandler
 	setupHandler := handlers.NewSetupHandler(db, log)
 	settingsHandler := handlers.NewSettingsHandler(db, log)
-	cephMetricsHandler := handlers.NewCephMetricsHandler(db, log)
+	cephMetricsHandler := handlers.NewCephMetricsHandlerWithNative(db, log, nativeHandler)
+	monitoringHandler.ClusterHealth = cephMetricsHandler.HealthStatus
 
 	// ── Public routes ──
 	r.POST("/api/v1/auth/login", authHandler.Login)

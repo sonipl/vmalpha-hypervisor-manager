@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,9 +12,10 @@ import (
 )
 
 type MonitoringHandler struct {
-	Native *NativeHandler
-	DB     *gorm.DB
-	Log    *logrus.Logger
+	Native        *NativeHandler
+	ClusterHealth func(context.Context) (string, error)
+	DB            *gorm.DB
+	Log           *logrus.Logger
 }
 
 func NewMonitoringHandler(db *gorm.DB, log *logrus.Logger) *MonitoringHandler {
@@ -62,6 +64,14 @@ func (h *MonitoringHandler) GetDashboardMetrics(c *gin.Context) {
 			payload[key] = value
 		}
 	}
+	if h.ClusterHealth != nil {
+		health, err := h.ClusterHealth(c.Request.Context())
+		if err == nil {
+			payload["ceph_health"] = health
+			payload["cluster_health"] = combinedClusterHealth(payload["host_health"], health)
+		}
+	}
+	payload["cluster_health_scope"] = "Enrolled KVM hosts and Ceph storage"
 	c.JSON(http.StatusOK, payload)
 }
 
@@ -130,4 +140,17 @@ func (h *MonitoringHandler) GetEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, PaginatedResponse{Data: logs, Total: total, Page: page, PerPage: perPage})
+}
+
+func combinedClusterHealth(host any, ceph string) string {
+	if host == "Degraded" || ceph == "HEALTH_ERR" {
+		return "Degraded"
+	}
+	if ceph == "HEALTH_WARN" {
+		return "Warning"
+	}
+	if host == "Healthy" && ceph == "HEALTH_OK" {
+		return "Healthy"
+	}
+	return "Unknown"
 }

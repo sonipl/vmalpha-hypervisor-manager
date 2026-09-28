@@ -52,7 +52,7 @@ export default function DashboardPage() {
         <MetricCard title="Hosts" value={metrics?.hosts.total ?? '—'}
           subtitle={metrics ? `${metrics.hosts.ready} ready in inventory` : 'Unavailable'} icon={Server} color="blue" />
         <MetricCard title="Cluster Health" value={metrics?.cluster_health ?? 'Unknown'}
-          subtitle="Requires live cluster monitoring" icon={Activity} color="copper" />
+          subtitle={metrics?.cluster_health_scope ?? "Requires live cluster monitoring"} icon={Activity} color="copper" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-5">

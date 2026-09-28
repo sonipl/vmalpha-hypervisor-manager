@@ -305,6 +305,7 @@ export interface DashboardMetrics {
     ready: number;
   };
   cluster_health: string;
+  cluster_health_scope?: string;
   telemetry_status: string;
   utilization: {
     cpu_percent: number | null;

@@ -11,6 +11,7 @@ import (
 )
 
 type hostMeasurement struct {
+	KVM      *bool    `json:"kvm"`
 	CPU      int      `json:"cpu"`
 	CPUUsage *float64 `json:"cpuUsage"`
 	Memory   struct {
@@ -27,7 +28,7 @@ type hostMeasurement struct {
 // cluster utilization, and root filesystem usage is not Ceph capacity.
 func (h *NativeHandler) dashboardTelemetry(ctx context.Context) map[string]any {
 	utilization := map[string]any{"cpu_percent": nil, "memory_percent": nil, "storage_percent": nil, "network_mbps": nil}
-	result := map[string]any{"telemetry_status": "unavailable", "utilization": utilization, "hosts_expected": len(h.Hosts), "hosts_observed": 0, "storage_scope": "host_root_filesystems"}
+	result := map[string]any{"host_health": "Unknown", "telemetry_status": "unavailable", "utilization": utilization, "hosts_expected": len(h.Hosts), "hosts_observed": 0, "storage_scope": "host_root_filesystems"}
 	if len(h.Hosts) == 0 {
 		return result
 	}
@@ -58,8 +59,17 @@ func (h *NativeHandler) dashboardTelemetry(ctx context.Context) map[string]any {
 	close(samples)
 	var cpu, cores, memoryUsed, memoryTotal, storageUsed, storageTotal float64
 	observed := 0
+	kvmReady := 0
+	kvmFailed := false
 	for s := range samples {
 		observed++
+		if s.KVM != nil {
+			if *s.KVM {
+				kvmReady++
+			} else {
+				kvmFailed = true
+			}
+		}
 		cores += float64(s.CPU)
 		cpu += *s.CPUUsage * float64(s.CPU)
 		memoryUsed += s.Memory.Used
@@ -68,6 +78,11 @@ func (h *NativeHandler) dashboardTelemetry(ctx context.Context) map[string]any {
 		storageTotal += s.Storage.Total
 	}
 	result["hosts_observed"] = observed
+	if kvmFailed {
+		result["host_health"] = "Degraded"
+	} else if observed == len(h.Hosts) && kvmReady == observed {
+		result["host_health"] = "Healthy"
+	}
 	if observed != len(h.Hosts) {
 		if observed > 0 {
 			result["telemetry_status"] = "partial"

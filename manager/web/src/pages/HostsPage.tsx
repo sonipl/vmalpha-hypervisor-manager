@@ -13,12 +13,13 @@ function isHealthy(status: string) {
 }
 
 export default function HostsPage() {
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hosts'],
     queryFn: () => hostAPI.list().then((r) => r.data),
+    refetchInterval: 30000,
   });
 
-  const hosts = data?.data ?? [];
+  const hosts = isError ? [] : data?.data ?? [];
 
   const toggleMaintenance = async (id: string, enable: boolean) => {
     try {
@@ -50,7 +51,7 @@ export default function HostsPage() {
     },
     {
       key: 'cpu_cores', label: 'CPU', width: '100px', sortable: true,
-      render: (h) => <span className="font-mono tabular-nums">{h.cpu_cores ?? '—'} cores</span>,
+      render: (h) => <span className="font-mono tabular-nums">{h.cpu_cores > 0 ? `${h.cpu_cores} cores` : '—'}</span>,
     },
     {
       key: 'memory_mb', label: 'Memory', width: '100px', sortable: true,
@@ -96,7 +97,8 @@ export default function HostsPage() {
         <MetricCard title="Total Memory" value={`${(hosts.reduce((s, h) => s + (h.memory_mb ?? 0), 0) / 1024).toFixed(0)} GB`} icon={MemoryStick} color="copper" />
       </div>
 
-      <DataTable columns={columns} data={hosts} loading={isLoading} emptyMessage="No hosts found — cluster nodes will appear here once Kubernetes is reachable." />
+      {isError && <p role="alert" className="text-sm text-red-600">Host inventory refresh failed. <button onClick={() => refetch()}>Retry</button></p>}
+      <DataTable columns={columns} data={hosts} loading={isLoading} emptyMessage="No enrolled host inventory is available." />
     </div>
   );
 }
