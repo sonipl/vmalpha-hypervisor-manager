@@ -27,6 +27,7 @@ export default function DashboardPage() {
   // Do not present cached inventory as current after a failed refresh.
   const metrics = metricsQuery.isError ? undefined : metricsQuery.data;
   const vms = vmsQuery.isError ? undefined : vmsQuery.data;
+  const healthTone = metrics?.cluster_health === 'Healthy' ? 'green' : metrics?.cluster_health === 'Warning' ? 'amber' : ['Degraded', 'Critical', 'Unhealthy'].includes(metrics?.cluster_health ?? '') ? 'red' : 'neutral';
   const statuses = metrics ? [
     { name: 'Running', value: metrics.vms.running },
     { name: 'Stopped', value: metrics.vms.stopped },
@@ -52,7 +53,7 @@ export default function DashboardPage() {
         <MetricCard title="Hosts" value={metrics?.hosts.total ?? '—'}
           subtitle={metrics ? `${metrics.hosts.ready} ready in inventory` : 'Unavailable'} icon={Server} color="blue" />
         <MetricCard title="Cluster Health" value={metrics?.cluster_health ?? 'Unknown'}
-          subtitle={metrics?.cluster_health === "Healthy" ? "Live host and Ceph checks passed" : metrics?.cluster_health_scope ?? "Live cluster health is unavailable"} icon={Activity} color="copper" />
+          subtitle={metrics?.cluster_health === "Healthy" ? "Live host and Ceph checks passed" : metrics?.cluster_health_scope ?? "Live cluster health is unavailable"} icon={Activity} color={healthTone} statusTone={healthTone} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-5">

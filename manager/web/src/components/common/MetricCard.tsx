@@ -9,10 +9,14 @@ interface MetricCardProps {
   icon?: React.ElementType;
   trend?: number;
   trendLabel?: string;
-  color?: 'nova' | 'copper' | 'green' | 'red' | 'blue';
+  color?: 'nova' | 'copper' | 'green' | 'red' | 'blue' | 'amber' | 'neutral';
+  statusTone?: 'green' | 'amber' | 'red' | 'neutral';
 }
 
+const statusText = {green: 'text-emerald-700 dark:text-emerald-400', amber: 'text-amber-700 dark:text-amber-400', red: 'text-red-700 dark:text-red-400', neutral: 'text-gray-600 dark:text-gray-400'};
 const colorMap = {
+  amber: 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400',
+  neutral: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
   nova:   'bg-nova-50 dark:bg-nova-950 text-nova-600 dark:text-nova-400',
   copper: 'bg-copper-50 dark:bg-copper-950 text-copper-600 dark:text-copper-400',
   green:  'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400',
@@ -21,7 +25,7 @@ const colorMap = {
 };
 
 export default function MetricCard({
-  title, value, subtitle, icon: Icon, trend, trendLabel, color = 'nova',
+  title, value, subtitle, icon: Icon, trend, trendLabel, color = 'nova', statusTone,
 }: MetricCardProps) {
   return (
     <div className="card p-5">
@@ -30,7 +34,7 @@ export default function MetricCard({
           <p className="text-xs font-mono font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
             {title}
           </p>
-          <p className="text-2xl font-display font-semibold text-gray-900 dark:text-white tabular-nums">
+          <p className={clsx('text-2xl font-display font-semibold tabular-nums', statusTone ? statusText[statusTone] : 'text-gray-900 dark:text-white')}>
             {value}
           </p>
           {subtitle && (
