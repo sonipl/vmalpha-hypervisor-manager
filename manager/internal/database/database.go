@@ -41,6 +41,8 @@ func Migrate(db *gorm.DB) error {
 		&models.Host{},
 		&models.StorageClass{},
 		&models.Network{},
+		&models.DistributedNetwork{},
+		&models.DistributedNetworkReview{},
 		&models.VMTemplate{},
 		&models.VirtualMachine{},
 		&models.VMDisk{},

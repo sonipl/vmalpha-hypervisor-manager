@@ -36,6 +36,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 	storageBackendsHandler.Native = nativeHandler
 	storageBackendsHandler.StartNativeRegistrationRefresh("kvm11")
 	networkHandler := handlers.NewNetworkHandler(db, log)
+	distributedNetworkHandler := handlers.NewDistributedNetworkHandler(db, nativeHandler)
 	authHandler := handlers.NewAuthHandler(db, log, cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	aiHandler := handlers.NewAIHandler(db, log)
 	monitoringHandler := handlers.NewMonitoringHandler(db, log)
@@ -129,6 +130,12 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 			storage.POST("/backups", middleware.RBACMiddleware("backups", "create"), storageHandler.CreateBackupJob)
 		}
 
+		// Explicit, reviewed native-network operations only; reads never fan out mutations.
+		distributed := auth.Group("/distributed-networks")
+		distributed.GET("", middleware.RBACMiddleware("networks", "list"), distributedNetworkHandler.List)
+		distributed.GET("/targets", middleware.RBACMiddleware("networks", "list"), distributedNetworkHandler.Targets)
+		distributed.POST("/review", middleware.RBACMiddleware("networks", "create"), middleware.RBACMiddleware("networks", "update"), middleware.RBACMiddleware("networks", "delete"), distributedNetworkHandler.Review)
+		distributed.POST("/apply", middleware.RBACMiddleware("networks", "create"), middleware.RBACMiddleware("networks", "update"), middleware.RBACMiddleware("networks", "delete"), distributedNetworkHandler.Apply)
 		// ── Networking ──
 		networks := auth.Group("/networks")
 		{

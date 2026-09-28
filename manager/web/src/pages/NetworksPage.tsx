@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DistributedNetworks from '@/components/DistributedNetworks';
 import { useQuery } from '@tanstack/react-query';
 import { networkAPI } from '@/services/api';
 import DataTable, { Column } from '@/components/common/DataTable';
@@ -100,6 +101,7 @@ export default function NetworksPage() {
         </div>
       </div>
 
+      {tab === 'networks' && <DistributedNetworks />}
       {tab === 'networks' && <DataTable columns={netColumns} data={netData} loading={isLoading} emptyMessage={networkError ? "Network inventory unavailable" : "No networks found"} />}
       {tab === 'firewalls' && <DataTable columns={fwColumns} data={fwData} loading={firewallsLoading} emptyMessage={firewallError ? "Firewall rules unavailable" : "No firewall rules"} />}
     </div>
