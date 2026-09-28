@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Server, Network, Shield, Brain,
@@ -29,6 +30,8 @@ const navItems = [
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(() =>
     document.documentElement.classList.contains('dark')
@@ -94,7 +97,7 @@ export default function Layout({ children }: LayoutProps) {
                     `sidebar-link ${isActive ? 'active' : ''} ${collapsed ? 'justify-center px-0' : ''}`
                   }
                   title={collapsed ? item.label : undefined}
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => { setMobileMenuOpen(false); if (location.pathname === item.path) void queryClient.refetchQueries({ type: 'active' }, { cancelRefetch: false }); }}
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" />
                   {!collapsed && <span>{item.label}</span>}
@@ -185,7 +188,7 @@ export default function Layout({ children }: LayoutProps) {
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
+          onClick={() => { setMobileMenuOpen(false); if (location.pathname === item.path) void queryClient.refetchQueries({ type: 'active' }, { cancelRefetch: false }); }}
         />
       )}
     </div>

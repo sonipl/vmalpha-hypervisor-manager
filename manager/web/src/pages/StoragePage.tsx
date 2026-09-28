@@ -567,7 +567,7 @@ export default function StoragePage() {
       <div className="border-b border-gray-200 dark:border-gray-800">
         <div className="flex gap-1 overflow-x-auto">
           {tabs.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
+            <button key={t.key} onClick={() => { setTab(t.key as typeof tab); const keys = t.key === 'cluster' ? ['ceph-health', 'ceph-metrics'] : t.key === 'volumes' ? ['volumes'] : ['storage-classes']; keys.forEach(key => { void qc.refetchQueries({ queryKey: [key], type: 'active' }, { cancelRefetch: false }); }); }}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 tab === t.key ? 'border-nova-500 text-nova-600 dark:text-nova-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}>
