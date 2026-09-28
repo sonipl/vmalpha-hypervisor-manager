@@ -66,7 +66,10 @@ func parseQCOWInfo(raw []byte) (qcowInfo, error) {
 func inspectQCOW(file *os.File) (qcowInfo, string, error) {
 	// qemu-img receives an inherited descriptor, not a user-controlled pathname.
 	// The opened descriptor was constrained by os.Root to the registered NFS mount.
-	cmd := exec.Command("qemu-img", "info", "--output=json", "/proc/self/fd/3")
+	// NFS does not provide the advisory locking semantics qemu-img otherwise
+	// expects. The descriptor is already opened read-only below a verified
+	// datastore root, so shared inspection is safe and avoids a false hang.
+	cmd := exec.Command("qemu-img", "info", "--force-share", "--output=json", "/proc/self/fd/3")
 	cmd.ExtraFiles = []*os.File{file}
 	raw, err := cmd.Output()
 	if err != nil {
