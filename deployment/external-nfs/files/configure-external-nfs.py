@@ -35,7 +35,10 @@ def configure(c):
  p.mkdir(parents=True,exist_ok=True)
  run('systemctl','daemon-reload');unit=run('systemd-escape','--path','--suffix=automount',target).strip();run('systemctl','start',unit)
  run('timeout','35','stat','--',target+'/.' )
- result=json.loads(run('findmnt','-J','-M',target,'-o','SOURCE,FSTYPE,OPTIONS'))['filesystems'][0]
- if result['source']!=source or result['fstype'] not in ('nfs','nfs4') or not {'vers='+version,'soft'}<=set(result['options'].split(',')):raise ValueError('Mount verification failed')
+ results=json.loads(run('findmnt','-J','-M',target,'-o','SOURCE,FSTYPE,OPTIONS'))['filesystems']
+ # A systemd automount intentionally yields an autofs layer plus the actual
+ # NFS mount at the same target. Validate the NFS layer, not the autofs layer.
+ result=next((v for v in results if v.get('fstype') in ('nfs','nfs4')),None)
+ if not result or result['source']!=source or not {'vers='+version,'soft'}<=set(result['options'].split(',')):raise ValueError('Mount verification failed')
  print(json.dumps({'id':c['id'],'source':source,'mount_path':target,'verified':True}))
 if __name__=='__main__':configure(json.loads(pathlib.Path(sys.argv[1]).read_text()))

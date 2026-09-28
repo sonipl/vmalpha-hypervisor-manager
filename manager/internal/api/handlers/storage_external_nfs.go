@@ -93,10 +93,26 @@ func externalMountIdentity(ctx context.Context, b StorageBackend) error {
 			Options string `json:"options"`
 		} `json:"filesystems"`
 	}
-	if json.Unmarshal(out, &data) != nil || len(data.Filesystems) != 1 {
+	if json.Unmarshal(out, &data) != nil {
 		return fmt.Errorf("mount unavailable")
 	}
-	m := data.Filesystems[0]
+	// systemd automount exposes an autofs entry and the real NFS entry at the
+	// same target. Only the latter carries the identity we need to validate.
+	var m struct {
+		Source  string `json:"source"`
+		FSType  string `json:"fstype"`
+		Options string `json:"options"`
+	}
+	found := false
+	for _, candidate := range data.Filesystems {
+		if candidate.FSType == "nfs" || candidate.FSType == "nfs4" {
+			m, found = candidate, true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("mount unavailable")
+	}
 	opts := "," + m.Options + ","
 	if m.Source != source || (m.FSType != "nfs" && m.FSType != "nfs4") || !strings.Contains(opts, ",vers="+version+",") || !strings.Contains(opts, ",soft,") {
 		return fmt.Errorf("mount identity or NFS options differ")
