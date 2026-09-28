@@ -74,11 +74,11 @@ export default function DashboardPage() {
             {([
               ['CPU', metrics?.utilization.cpu_percent],
               ['Memory', metrics?.utilization.memory_percent],
-              ['Storage', metrics?.utilization.storage_percent],
+              ['Host root filesystems', metrics?.utilization.storage_percent],
             ] as const).map(([label, value]) => typeof value === 'number' && Number.isFinite(value)
               ? <UtilizationGauge key={label} label={label} value={value} />
               : <p key={label} className="text-sm text-gray-500">{label}: unavailable</p>)}
-            <p className="text-sm text-gray-500">Live telemetry and utilization history are not yet configured.</p>
+            <p className="text-sm text-gray-500">{metrics?.telemetry_status === 'live' ? 'Live host samples. Filesystem usage excludes shared Ceph capacity.' : metrics?.telemetry_status === 'partial' ? 'Some hosts are unavailable; aggregate utilization is withheld.' : 'Live host telemetry is unavailable.'}</p>
           </div>
         </div>
       </div>

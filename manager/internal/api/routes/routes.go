@@ -36,6 +36,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 	authHandler := handlers.NewAuthHandler(db, log, cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	aiHandler := handlers.NewAIHandler(db, log)
 	monitoringHandler := handlers.NewMonitoringHandler(db, log)
+	monitoringHandler.Native = nativeHandler
 	setupHandler := handlers.NewSetupHandler(db, log)
 	settingsHandler := handlers.NewSettingsHandler(db, log)
 	cephMetricsHandler := handlers.NewCephMetricsHandler(db, log)

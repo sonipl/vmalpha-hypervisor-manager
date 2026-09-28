@@ -11,8 +11,9 @@ import (
 )
 
 type MonitoringHandler struct {
-	DB  *gorm.DB
-	Log *logrus.Logger
+	Native *NativeHandler
+	DB     *gorm.DB
+	Log    *logrus.Logger
 }
 
 func NewMonitoringHandler(db *gorm.DB, log *logrus.Logger) *MonitoringHandler {
@@ -49,13 +50,19 @@ func (h *MonitoringHandler) GetDashboardMetrics(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Inventory unavailable"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"vms":              counts,
 		"hosts":            gin.H{"total": total, "ready": ready},
 		"cluster_health":   "Unknown",
 		"telemetry_status": "unavailable",
 		"utilization":      gin.H{"cpu_percent": nil, "memory_percent": nil, "storage_percent": nil, "network_mbps": nil},
-	})
+	}
+	if h.Native != nil {
+		for key, value := range h.Native.dashboardTelemetry(c.Request.Context()) {
+			payload[key] = value
+		}
+	}
+	c.JSON(http.StatusOK, payload)
 }
 
 // Alert Rules
