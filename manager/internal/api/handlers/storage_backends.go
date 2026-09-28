@@ -17,7 +17,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const storageConfigPath = "/var/lib/novasphere/config/storage.json"
+const storageConfigPath = "/opt/vmalpha-manager/data/storage.json"
+const legacyStorageConfigPath = "/var/lib/novasphere/config/storage.json"
+
+const nativeBackendVerificationTTL = 15 * time.Minute
 
 var safeNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,61}[a-z0-9]$`)
 
@@ -47,18 +50,19 @@ func NewStorageBackendsHandler(db *gorm.DB, log *logrus.Logger) *StorageBackends
 }
 
 func storageConfigFilePath() string {
-	// Persist on the mounted config volume (writable). /host is read-only in the API pod.
-	for _, p := range []string{storageConfigPath, "/host/var/lib/novasphere/config/storage.json"} {
-		if _, err := os.Stat(filepath.Dir(p)); err == nil {
-			return p
-		}
-	}
+	// This is the manager service's explicitly writable state directory. Legacy
+	// paths are read only as a migration fallback, never selected for new writes.
 	return storageConfigPath
 }
+
+func legacyStorageConfigFilePath() string { return legacyStorageConfigPath }
 
 func loadStorageConfig() storageConfigFile {
 	cfg := storageConfigFile{Backends: []StorageBackend{}}
 	b, err := os.ReadFile(storageConfigFilePath())
+	if err != nil && os.IsNotExist(err) {
+		b, err = os.ReadFile(legacyStorageConfigFilePath())
+	}
 	if err != nil {
 		return cfg
 	}
@@ -102,11 +106,11 @@ func backendByID(cfg storageConfigFile, id string) (StorageBackend, int, bool) {
 }
 
 type k8sStorageClass struct {
-	Name         string `json:"name"`
-	Provisioner  string `json:"provisioner"`
-	ReclaimPolicy string `json:"reclaim_policy"`
+	Name              string `json:"name"`
+	Provisioner       string `json:"provisioner"`
+	ReclaimPolicy     string `json:"reclaim_policy"`
 	VolumeBindingMode string `json:"volume_binding_mode"`
-	Default      bool   `json:"is_default"`
+	Default           bool   `json:"is_default"`
 }
 
 func listK8sStorageClasses() []k8sStorageClass {
@@ -117,8 +121,8 @@ func listK8sStorageClasses() []k8sStorageClass {
 	var payload struct {
 		Items []struct {
 			Metadata struct {
-				Name   string            `json:"name"`
-				Labels map[string]string `json:"labels"`
+				Name        string            `json:"name"`
+				Labels      map[string]string `json:"labels"`
 				Annotations map[string]string `json:"annotations"`
 			} `json:"metadata"`
 			Provisioner       string `json:"provisioner"`
@@ -245,7 +249,33 @@ func probeNFSPathStatus(server, export, mountPath string) (string, int64) {
 	return "unmounted", 0
 }
 
+func nativeManagedBackend(b StorageBackend) bool {
+	managed, _ := b.Config["native_managed"].(bool)
+	return managed && b.Config["managed_by"] == "ceph-registration"
+}
+
+func nativeBackendStatus(b StorageBackend) (string, int64, string) {
+	verifiedAt, ok := b.Config["verified_at"].(string)
+	if !ok || strings.TrimSpace(verifiedAt) == "" {
+		return "unknown", 0, "native verification timestamp is missing"
+	}
+	when, err := time.Parse(time.RFC3339, verifiedAt)
+	if err != nil {
+		return "unknown", 0, "native verification timestamp is invalid"
+	}
+	if time.Since(when) > nativeBackendVerificationTTL || when.After(time.Now().Add(time.Minute)) {
+		return "unknown", 0, "native verification is stale; awaiting a fresh Ceph agent manifest"
+	}
+	if b.Status != "online" {
+		return b.Status, 0, b.Message
+	}
+	return "online", 0, b.Message
+}
+
 func probeBackendStatus(b StorageBackend) (string, int64, string) {
+	if nativeManagedBackend(b) {
+		return nativeBackendStatus(b)
+	}
 	switch b.Type {
 	case "local":
 		mp, _ := b.Config["mount_path"].(string)
@@ -258,11 +288,12 @@ func probeBackendStatus(b StorageBackend) (string, int64, string) {
 		st, cap := probeNFSPathStatus(server, export, mp)
 		return st, cap, ""
 	case "ceph":
-		// Ceph RBD is provisioned via CSI — no host mount to probe
+		// Legacy CSI registration can only report its recorded state; native
+		// registrations above are evaluated from fresh agent verification.
 		if b.Status == "error" {
 			return "error", 0, b.Message
 		}
-		return "online", 0, ""
+		return b.Status, 0, b.Message
 	default:
 		return b.Status, b.CapacityBytes, b.Message
 	}
@@ -278,14 +309,14 @@ func (h *StorageBackendsHandler) ListClasses(c *gin.Context) {
 	for _, sc := range k8s {
 		seen[sc.Name] = true
 		classes = append(classes, gin.H{
-			"id":               sc.Name,
-			"name":             sc.Name,
-			"provisioner":      sc.Provisioner,
-			"status":           "active",
-			"pool":             "—",
+			"id":                 sc.Name,
+			"name":               sc.Name,
+			"provisioner":        sc.Provisioner,
+			"status":             "active",
+			"pool":               "—",
 			"replication_factor": 1,
-			"is_default":       sc.Default,
-			"source":           "kubernetes",
+			"is_default":         sc.Default,
+			"source":             "kubernetes",
 		})
 	}
 
@@ -318,6 +349,14 @@ func (h *StorageBackendsHandler) ListClasses(c *gin.Context) {
 }
 
 func backendProvisioner(b StorageBackend) string {
+	if nativeManagedBackend(b) {
+		switch b.Type {
+		case "ceph":
+			return "vmalpha.io/native-rbd"
+		case "nfs":
+			return "vmalpha.io/native-ceph-nfs"
+		}
+	}
 	switch b.Type {
 	case "nfs":
 		return "k8s.io/nfs"
@@ -329,6 +368,13 @@ func backendProvisioner(b StorageBackend) string {
 }
 
 func backendPool(b StorageBackend) string {
+	if b.Type == "nfs" && nativeManagedBackend(b) {
+		if fs, ok := b.Config["cephfs"].(map[string]any); ok {
+			if p, ok := fs["data_pool"].(string); ok {
+				return p
+			}
+		}
+	}
 	if b.Type == "ceph" {
 		if p, ok := b.Config["pool"].(string); ok {
 			return p
@@ -348,11 +394,11 @@ func backendReplication(b StorageBackend) int {
 }
 
 type localStorageRequest struct {
-	Name       string `json:"name" binding:"required"`
-	Device     string `json:"device"`
-	MountPath  string `json:"mount_path" binding:"required"`
-	FSType     string `json:"fs_type"`
-	Format     bool   `json:"format"`
+	Name         string `json:"name" binding:"required"`
+	Device       string `json:"device"`
+	MountPath    string `json:"mount_path" binding:"required"`
+	FSType       string `json:"fs_type"`
+	Format       bool   `json:"format"`
 	StorageClass string `json:"storage_class"`
 }
 
@@ -384,10 +430,10 @@ func (h *StorageBackendsHandler) AddLocal(c *gin.Context) {
 		Status:       "pending",
 		CreatedAt:    time.Now().UTC(),
 		Config: map[string]any{
-			"device":      strings.TrimSpace(req.Device),
-			"mount_path":  req.MountPath,
-			"fs_type":     fsType,
-			"format":      req.Format,
+			"device":     strings.TrimSpace(req.Device),
+			"mount_path": req.MountPath,
+			"fs_type":    fsType,
+			"format":     req.Format,
 		},
 	}
 
@@ -976,6 +1022,17 @@ func unmountBackend(b StorageBackend) error {
 	return nil
 }
 
+func rejectNativeManagedMutation(c *gin.Context, b StorageBackend) bool {
+	if !nativeManagedBackend(b) {
+		return false
+	}
+	c.JSON(http.StatusConflict, gin.H{
+		"error":   "native-managed backend is controlled by verified Ceph registration",
+		"message": "Refresh the protected Ceph registration manifest after a verified backend operation.",
+	})
+	return true
+}
+
 func updateBackendInConfig(id string, fn func(*StorageBackend)) (StorageBackend, error) {
 	cfg := loadStorageConfig()
 	b, idx, ok := backendByID(cfg, id)
@@ -1022,6 +1079,9 @@ func (h *StorageBackendsHandler) MountBackend(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "backend not found"})
 		return
 	}
+	if rejectNativeManagedMutation(c, b) {
+		return
+	}
 	var err error
 	switch b.Type {
 	case "local":
@@ -1062,6 +1122,9 @@ func (h *StorageBackendsHandler) UnmountBackend(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "backend not found"})
 		return
 	}
+	if rejectNativeManagedMutation(c, b) {
+		return
+	}
 	if err := unmountBackend(b); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -1092,6 +1155,9 @@ func (h *StorageBackendsHandler) DeleteBackend(c *gin.Context) {
 	b, idx, ok := backendByID(cfg, id)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "backend not found"})
+		return
+	}
+	if rejectNativeManagedMutation(c, b) {
 		return
 	}
 	cfg.Backends = append(cfg.Backends[:idx], cfg.Backends[idx+1:]...)

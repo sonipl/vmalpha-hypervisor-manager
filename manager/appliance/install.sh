@@ -9,7 +9,8 @@ package_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 getent passwd vmalpha >/dev/null || useradd --system --home-dir /opt/vmalpha-manager --shell /sbin/nologin vmalpha
 install -m 0755 "$package_dir/vmalpha-manager" /usr/local/bin/vmalpha-manager
 install -m 0755 "$package_dir/firstboot.py" /usr/libexec/vmalpha-manager-firstboot
-install -m 0644 "$package_dir/vmalpha-manager.service" "$package_dir/vmalpha-manager-firstboot.service" /etc/systemd/system/
+install -m 0700 "$package_dir/scripts/register-ceph-backends.py" /usr/libexec/vmalpha-register-ceph-backends
+install -m 0644 "$package_dir/vmalpha-manager.service" "$package_dir/vmalpha-manager-firstboot.service" "$package_dir/vmalpha-ceph-backend-registration.service" "$package_dir/vmalpha-ceph-backend-registration.timer" /etc/systemd/system/
 mkdir -p /opt/vmalpha-manager/web /etc/nginx/conf.d /etc/systemd/system/nginx.service.d
 cp -a "$package_dir/dist" /opt/vmalpha-manager/web/
 chown -R root:root /opt/vmalpha-manager
@@ -38,6 +39,6 @@ After=vmalpha-manager-firstboot.service
 EOF
 restorecon -RF /usr/local/bin/vmalpha-manager /usr/libexec/vmalpha-manager-firstboot /opt/vmalpha-manager /etc/nginx /etc/systemd/system
 systemctl daemon-reload
-systemctl enable vmalpha-manager-firstboot vmalpha-manager nginx
+systemctl enable vmalpha-manager-firstboot vmalpha-manager nginx vmalpha-ceph-backend-registration.timer
 # Do not initialize database, administrator, JWT, or TLS in the reusable image.
 echo 'Manager files installed; first-boot initialization remains pending.'
