@@ -93,3 +93,22 @@ func TestDistributedApplyRejectsExpiredOrReplayedReview(t *testing.T) {
 		raw.Close()
 	}
 }
+
+func TestDistributedDiscoveryIsReadOnlyAndSelected(t *testing.T) {
+	n := NewNativeHandler(nil, map[string]config.NativeHostConfig{"one": {}, "two": {}})
+	b := &networkRefusal{}
+	n.Connect = func(config.NativeHostConfig) (nativeBroker, error) { return b, nil }
+	h := NewDistributedNetworkHandler(nil, n)
+	r := gin.New()
+	r.POST("/discover", h.Discover)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/discover", strings.NewReader(`{"hosts":["one"]}`)))
+	if w.Code != 200 || b.calls != 1 {
+		t.Fatal(w.Code, b.calls)
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("POST", "/discover", strings.NewReader(`{"hosts":["one","unknown"]}`)))
+	if w.Code != 400 || b.calls != 1 {
+		t.Fatal("unknown host triggered a broker call", w.Code, b.calls)
+	}
+}

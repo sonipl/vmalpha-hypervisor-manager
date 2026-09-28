@@ -20,3 +20,9 @@ The Manager deliberately fails closed on older brokers. **Installing this Manage
 Build backend and frontend from the same revision, run database migrations for DistributedNetwork and DistributedNetworkReview, then deploy the normal Manager service/UI artifact. No first-boot or Ansible hook invokes apply: future builds ship controls and capabilities, while actual network mutation always requires the reviewed operator action.
 
 Validation: backend handler/route tests, strict TypeScript checking, refused broker capability, VLAN/name constraints, expired/replayed review rejection, and explicit confirmation requirements. Live switch/port-group mutation and recovery remain a separate isolated integration gate.
+
+## Supplied host implementation and discovery
+
+The matching implementation is now `hypervisor/vmalpha_distributed_network.py`; code-only Ansible deployment and detailed topology/recovery notes are in `deployment/distributed-network/`. `POST /distributed-networks/discover` accepts `hosts` and returns per-host read-only interface, bridge membership, state and eligibility data. The form pre-populates a sole common eligible uplink and displays differences. Existing unmanaged bridges stay read-only rather than being silently taken over.
+
+The Linux bridge implementation creates stable VLAN access bridges for tagged port groups and returns their actual interface names. Update/delete currently require no guest or management use on all affected interfaces. Rollback is best-effort per host and reported explicitly; interrupted or failed rollback blocks subsequent operations. No live network integration test is claimed by source tests.

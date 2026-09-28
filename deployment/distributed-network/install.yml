@@ -1,0 +1,28 @@
+---
+- name: Install reviewed distributed network broker support (no network apply)
+  hosts: distributed_network_hosts
+  become: true
+  tasks:
+    - name: Require explicit source deployment opt-in
+      ansible.builtin.assert:
+        that: distributed_network_install | default(false) | bool
+    - name: Validate NetworkManager availability without changing it
+      ansible.builtin.command: nmcli general status
+      changed_when: false
+    - name: Install broker module
+      ansible.builtin.copy:
+        src: ../../hypervisor/vmalpha_distributed_network.py
+        dest: /usr/share/vmalpha/vmalpha_distributed_network.py
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+    - name: Deploy matching fixed-operation broker
+      ansible.builtin.copy:
+        src: ../../hypervisor/vmalpha-api.py
+        dest: /usr/libexec/vmalpha-api
+        owner: root
+        group: root
+        mode: '0755'
+        backup: true
+        validate: /usr/bin/python3 -m py_compile %s

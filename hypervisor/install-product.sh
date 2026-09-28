@@ -9,7 +9,7 @@ cp -a "$SOURCE/hostclient/." /usr/share/cockpit/hostclient/
 chown -R root:root /usr/share/cockpit/hostclient
 # The kickstart extracts product sources directly into this destination.
 # Preserve permissions there; copy only when running from a separate source tree.
-for module in vmalpha_monitoring.py vmalpha_san.py vmalpha_rbd.py vmalpha_storage.py vmalpha_containers.py components.json vmalpha_auth.py vmalpha_security.py vmalpha_datastore.py; do
+for module in vmalpha_distributed_network.py vmalpha_monitoring.py vmalpha_san.py vmalpha_rbd.py vmalpha_storage.py vmalpha_containers.py components.json vmalpha_auth.py vmalpha_security.py vmalpha_datastore.py; do
  if [ "$SOURCE/$module" -ef "/usr/share/vmalpha/$module" ]; then
   chown root:root "/usr/share/vmalpha/$module"
   chmod 0644 "/usr/share/vmalpha/$module"

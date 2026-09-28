@@ -142,6 +142,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 		distributed := auth.Group("/distributed-networks")
 		distributed.GET("", middleware.RBACMiddleware("networks", "list"), distributedNetworkHandler.List)
 		distributed.GET("/targets", middleware.RBACMiddleware("networks", "list"), distributedNetworkHandler.Targets)
+		distributed.POST("/discover", middleware.RBACMiddleware("networks", "list"), distributedNetworkHandler.Discover)
 		distributed.POST("/review", middleware.RBACMiddleware("networks", "create"), middleware.RBACMiddleware("networks", "update"), middleware.RBACMiddleware("networks", "delete"), distributedNetworkHandler.Review)
 		distributed.POST("/apply", middleware.RBACMiddleware("networks", "create"), middleware.RBACMiddleware("networks", "update"), middleware.RBACMiddleware("networks", "delete"), distributedNetworkHandler.Apply)
 		// ── Networking ──

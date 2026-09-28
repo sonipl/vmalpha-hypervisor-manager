@@ -13,6 +13,7 @@ from vmalpha_monitoring import handle as monitoring_handle
 from vmalpha_san import handle as san_handle, OPS as SAN_OPS
 from vmalpha_rbd import handle as rbd_handle, OPS as RBD_OPS
 from vmalpha_storage import handle as storage_handle, OPS as STORAGE_OPS
+from vmalpha_distributed_network import handle as distributed_handle, OPS as DISTRIBUTED_OPS, READ_OPS as DISTRIBUTED_READ
 from vmalpha_containers import handle as container_handle, OPS as CONTAINER_OPS, READ_OPS as CONTAINER_READ
 ROOT=pathlib.Path('/var/lib/libvirt/images')
 STATE=pathlib.Path('/var/lib/vmalpha')
@@ -118,6 +119,7 @@ def external_nfs_status(args):
 
 def main(q):
  op=q.get('op','');args=q.get('args',{})
+ if op in DISTRIBUTED_OPS:return distributed_handle(op,args,run)
  if op=='metrics':return monitoring_handle(args)
  if op in ('role-create','role-delete','permission-assign','permission-remove'):return access.mutate(op,args,run,name)
  if op in SAN_OPS:return san_handle(op,args,run,name)
@@ -280,13 +282,13 @@ if __name__=='__main__':
   q=json.loads(raw)
   if not isinstance(q,dict):raise ValueError('Invalid request')
   if os.geteuid()!=0:raise ValueError('Administrative access is required')
-  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ):
+  if q.get('op') not in (*DISTRIBUTED_READ,'storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ):
    STATE.mkdir(exist_ok=True);lock=open(STATE/'operations.lock','a');fcntl.flock(lock,fcntl.LOCK_EX)
   access.authorize(q)
   result=access.filter_result(q.get('op'),main(q))
-  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(q['op'],'Completed',target=str(q.get('args',{}).get('name') or pathlib.Path(q.get('args',{}).get('path','Host')).name)[:120],started=started)
+  if q.get('op') not in (*DISTRIBUTED_READ,'storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(q['op'],'Completed',target=str(q.get('args',{}).get('name') or pathlib.Path(q.get('args',{}).get('path','Host')).name)[:120],started=started)
   print(json.dumps(dict(ok=True,result=result)))
  except Exception as e:
-  if q.get('op') not in ('storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(str(q.get('op','invalid')),'Failed',started=started)
+  if q.get('op') not in (*DISTRIBUTED_READ,'storage.external-nfs.status','ceph.telemetry','inventory','security','tasks','logs','files','registrations',*CONTAINER_READ,'storage-discover','metrics',*DATASTORE_READ,'ds-upload-chunk'):audit(str(q.get('op','invalid')),'Failed',started=started)
   print(json.dumps(dict(ok=False,error=str(e))))
   sys.exit(1)

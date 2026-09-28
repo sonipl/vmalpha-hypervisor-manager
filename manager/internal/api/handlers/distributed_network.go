@@ -99,6 +99,42 @@ func (h *DistributedNetworkHandler) call(ctx context.Context, host, operation st
 	}
 	return b.Call(ctx, nativehost.Request{Operation: operation, Arguments: args})
 }
+
+// Discover never applies or imports host configuration. Host errors remain
+// visible instead of pretending unlike hosts have a common configuration.
+func (h *DistributedNetworkHandler) Discover(c *gin.Context) {
+	var req struct {
+		Hosts []string `json:"hosts"`
+	}
+	if c.ShouldBindJSON(&req) != nil || len(req.Hosts) == 0 || len(req.Hosts) > 64 {
+		c.JSON(400, gin.H{"error": "Select target hosts"})
+		return
+	}
+	seen := map[string]bool{}
+	for _, host := range req.Hosts {
+		if h.Native == nil {
+			c.JSON(503, gin.H{"error": "Enrollment unavailable"})
+			return
+		}
+		if _, ok := h.Native.Hosts[host]; !ok || seen[host] {
+			c.JSON(400, gin.H{"error": "Distinct enrolled hosts required"})
+			return
+		}
+		seen[host] = true
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+	results := map[string]any{}
+	for _, host := range req.Hosts {
+		raw, err := h.call(ctx, host, "network.distributed.discover", map[string]any{})
+		if err != nil || !json.Valid(raw) {
+			results[host] = gin.H{"error": "Host discovery unavailable"}
+		} else {
+			results[host] = json.RawMessage(raw)
+		}
+	}
+	c.JSON(200, gin.H{"hosts": results})
+}
 func (h *DistributedNetworkHandler) Review(c *gin.Context) {
 	var req struct {
 		ID       string          `json:"id"`
@@ -161,6 +197,9 @@ func (h *DistributedNetworkHandler) Review(c *gin.Context) {
 		}
 		if err != nil || json.Unmarshal(raw, &result) != nil || !result.Supported || result.Fingerprint == "" {
 			failures[host] = "Host preflight unavailable or refused; no changes applied"
+			if err != nil {
+				failures[host] = err.Error()
+			}
 			continue
 		}
 		previews[host] = raw
@@ -243,7 +282,14 @@ func (h *DistributedNetworkHandler) Apply(c *gin.Context) {
 		}
 		if err != nil || json.Unmarshal(raw, &result) != nil || !result.Applied {
 			failed = true
-			results[host] = gin.H{"state": "failed", "message": "Host refused or failed; inspect host before retry"}
+			failure := gin.H{"state": "failed", "message": "Host refused or failed; inspect host before retry"}
+			if json.Valid(raw) {
+				failure["result"] = json.RawMessage(raw)
+			}
+			if err != nil {
+				failure["error"] = err.Error()
+			}
+			results[host] = failure
 		} else {
 			results[host] = gin.H{"state": "applied", "result": json.RawMessage(raw)}
 		}
