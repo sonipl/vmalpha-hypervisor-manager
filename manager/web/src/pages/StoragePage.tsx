@@ -480,7 +480,7 @@ export default function StoragePage() {
       key: 'actions', label: '', width: '120px',
       render: (b) => (
         <div className="flex items-center gap-1">
-          {b.type !== 'ceph' && (
+          {b.type !== 'ceph' && !b.config?.native_managed && (
             <>
               {(b.status === 'unmounted' || b.status === 'offline' || b.status === 'error') && (
                 <button
