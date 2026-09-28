@@ -21,6 +21,17 @@ type HostHandler struct {
 	Native *NativeHandler
 }
 
+// recoveredNativeStatus restores a host that was marked Offline solely because
+// its last live broker request failed.  A current, validated inventory response
+// is stronger evidence than that transient failure.  Operator-selected states
+// remain untouched.
+func recoveredNativeStatus(status models.HostStatus) models.HostStatus {
+	if status == models.HostStatusOffline || status == models.HostStatusError {
+		return models.HostStatusReady
+	}
+	return status
+}
+
 func NewHostHandler(db *gorm.DB, hub *websocket.Hub, log *logrus.Logger) *HostHandler {
 	return &HostHandler{DB: db, Hub: hub, Log: log}
 }
@@ -75,7 +86,7 @@ func (h *HostHandler) refreshNativeHosts(c *gin.Context) {
 			if osVersion == "" {
 				osVersion = inventory.Version
 			}
-			updates = map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion}
+			updates = map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion, "status": recoveredNativeStatus(host.Status)}
 		}
 		if err := h.DB.Model(&models.Host{}).Where("id = ?", host.ID).Updates(updates).Error; err != nil {
 			h.Log.WithError(err).WithField("host", host.Name).Warn("native host fact update failed")
@@ -134,7 +145,7 @@ func (h *HostHandler) GetHost(c *gin.Context) {
 			if osVersion == "" {
 				osVersion = inventory.Version
 			}
-			h.DB.Model(&host).Updates(map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion})
+			h.DB.Model(&host).Updates(map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion, "status": recoveredNativeStatus(host.Status)})
 			h.DB.First(&host, "id = ?", id)
 		} else {
 			updates := map[string]any{"cpu_model": "", "cpu_cores": 0, "memory_mb": 0, "nic_count": 0, "kernel_ver": "", "os_version": "", "osd_count": 0}

@@ -1,0 +1,83 @@
+---
+# Repairs the local inventory capture after an interrupted update or network
+# event. The Manager separately rechecks the restricted live broker and marks
+# a previously Offline host Ready only after a valid response.
+- name: Repair VM Alpha host inventory capture
+  hosts: vmalpha_cluster
+  become: true
+  tasks:
+    - name: Install the supported inventory snapshot launcher
+      ansible.builtin.copy:
+        dest: /usr/libexec/vmalpha-inventory-snapshot
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/usr/bin/python3
+          """Best-effort periodic local inventory capture. Never delays host startup."""
+          import datetime
+          import json
+          import subprocess
+          import sys
+
+          sys.path.insert(0, '/usr/share/vmalpha')
+          from vmalpha_inventory_db import snapshot
+
+          result = subprocess.run(
+              ['/usr/libexec/vmalpha-api'],
+              input=json.dumps({'op': 'inventory', 'args': {}}),
+              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+              timeout=40, check=False,
+          )
+          if result.returncode:
+              raise RuntimeError(result.stderr.strip() or 'inventory broker failed')
+          response = json.loads(result.stdout)
+          if not response.get('ok'):
+              raise RuntimeError(response.get('error', 'inventory broker rejected request'))
+          snapshot(datetime.datetime.now(datetime.timezone.utc).isoformat(), response['result'])
+    - name: Install inventory snapshot systemd units
+      ansible.builtin.copy:
+        dest: '/etc/systemd/system/{{ item.name }}'
+        owner: root
+        group: root
+        mode: '0644'
+        content: '{{ item.content }}'
+      loop:
+        - name: vmalpha-inventory-snapshot.service
+          content: |
+            [Unit]
+            Description=Capture VM Alpha local inventory snapshot
+            After=network-online.target cockpit.socket
+            Wants=network-online.target
+
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/libexec/vmalpha-inventory-snapshot
+            TimeoutStartSec=45
+        - name: vmalpha-inventory-snapshot.timer
+          content: |
+            [Unit]
+            Description=Refresh VM Alpha local inventory database
+
+            [Timer]
+            OnBootSec=2min
+            OnUnitActiveSec=5min
+            Persistent=true
+
+            [Install]
+            WantedBy=timers.target
+    - name: Enable periodic inventory recovery
+      ansible.builtin.systemd_service:
+        name: vmalpha-inventory-snapshot.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+    - name: Capture a fresh inventory snapshot now
+      ansible.builtin.systemd_service:
+        name: vmalpha-inventory-snapshot.service
+        state: started
+    - name: Verify the snapshot did not fail
+      ansible.builtin.command: systemctl is-failed vmalpha-inventory-snapshot.service
+      register: vmalpha_inventory_snapshot_state
+      changed_when: false
+      failed_when: vmalpha_inventory_snapshot_state.stdout.strip() == 'failed'
