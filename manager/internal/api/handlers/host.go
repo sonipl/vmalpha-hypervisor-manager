@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -12,13 +15,72 @@ import (
 )
 
 type HostHandler struct {
-	DB  *gorm.DB
-	Hub *websocket.Hub
-	Log *logrus.Logger
+	DB     *gorm.DB
+	Hub    *websocket.Hub
+	Log    *logrus.Logger
+	Native *NativeHandler
 }
 
 func NewHostHandler(db *gorm.DB, hub *websocket.Hub, log *logrus.Logger) *HostHandler {
 	return &HostHandler{DB: db, Hub: hub, Log: log}
+}
+
+func (h *HostHandler) nativeName(host models.Host) string {
+	if h.Native == nil {
+		return ""
+	}
+	for name, cfg := range h.Native.Hosts {
+		if host.Name == name || strings.SplitN(host.Name, ".", 2)[0] == name {
+			return name
+		}
+		if value, ok := host.Labels["hostname"].(string); ok && strings.SplitN(value, ".", 2)[0] == name {
+			return name
+		}
+		if address := strings.SplitN(cfg.Address, ":", 2)[0]; address == host.IPAddress {
+			return name
+		}
+	}
+	return ""
+}
+
+// refreshNativeHosts updates only facts from a successful current broker read.
+// Failed reads clear dynamic facts and mark Ready hosts Offline, while retaining
+// cluster membership and any Maintenance/Draining operator state.
+func (h *HostHandler) refreshNativeHosts(c *gin.Context) {
+	if h.Native == nil {
+		return
+	}
+	var hosts []models.Host
+	if err := h.DB.Find(&hosts).Error; err != nil {
+		h.Log.WithError(err).Warn("native host refresh query failed")
+		return
+	}
+	for _, host := range hosts {
+		name := h.nativeName(host)
+		if name == "" {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		inventory, err := h.Native.LiveInventory(ctx, name)
+		cancel()
+		updates := map[string]any{}
+		if err != nil {
+			updates = map[string]any{"cpu_model": "", "cpu_cores": 0, "memory_mb": 0, "nic_count": 0, "kernel_ver": "", "os_version": "", "osd_count": 0}
+			if host.Status == models.HostStatusReady {
+				updates["status"] = models.HostStatusOffline
+			}
+			h.Log.WithError(err).WithField("host", host.Name).Warn("native host inventory unavailable")
+		} else {
+			osVersion := inventory.OS
+			if osVersion == "" {
+				osVersion = inventory.Version
+			}
+			updates = map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion}
+		}
+		if err := h.DB.Model(&models.Host{}).Where("id = ?", host.ID).Updates(updates).Error; err != nil {
+			h.Log.WithError(err).WithField("host", host.Name).Warn("native host fact update failed")
+		}
+	}
 }
 
 func (h *HostHandler) ListHosts(c *gin.Context) {
@@ -28,6 +90,7 @@ func (h *HostHandler) ListHosts(c *gin.Context) {
 		return
 	}
 	syncHostsFromKubernetes(h.DB, h.Log)
+	h.refreshNativeHosts(c)
 
 	var hosts []models.Host
 	query := h.DB.Model(&models.Host{})
@@ -64,6 +127,24 @@ func (h *HostHandler) GetHost(c *gin.Context) {
 	if err := h.DB.First(&host, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Host not found"})
 		return
+	}
+	if name := h.nativeName(host); name != "" {
+		if inventory, err := h.Native.LiveInventory(c.Request.Context(), name); err == nil {
+			osVersion := inventory.OS
+			if osVersion == "" {
+				osVersion = inventory.Version
+			}
+			h.DB.Model(&host).Updates(map[string]any{"cpu_model": inventory.CPUModel, "cpu_cores": inventory.CPU, "memory_mb": int(inventory.Memory.Total / (1024 * 1024)), "nic_count": len(inventory.PhysicalInterfaces), "kernel_ver": inventory.Kernel, "os_version": osVersion})
+			h.DB.First(&host, "id = ?", id)
+		} else {
+			updates := map[string]any{"cpu_model": "", "cpu_cores": 0, "memory_mb": 0, "nic_count": 0, "kernel_ver": "", "os_version": "", "osd_count": 0}
+			if host.Status == models.HostStatusReady {
+				updates["status"] = models.HostStatusOffline
+			}
+			h.DB.Model(&host).Updates(updates)
+			h.DB.First(&host, "id = ?", id)
+			h.Log.WithError(err).WithField("host", host.Name).Warn("native host inventory unavailable")
+		}
 	}
 	c.JSON(http.StatusOK, host)
 }

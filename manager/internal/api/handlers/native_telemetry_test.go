@@ -52,3 +52,32 @@ func TestTelemetryRejectsMissingCPUAndImpossibleMemory(t *testing.T) {
 		}
 	}
 }
+
+func TestCombinedClusterHealth(t *testing.T) {
+	for _, tc := range []struct{ host, ceph, want string }{
+		{"Healthy", "HEALTH_OK", "Healthy"}, {"Unknown", "HEALTH_OK", "Unknown"},
+		{"Healthy", "HEALTH_WARN", "Warning"}, {"Healthy", "HEALTH_ERR", "Degraded"},
+		{"Degraded", "HEALTH_OK", "Degraded"}, {"Healthy", "", "Unknown"},
+	} {
+		if got := combinedClusterHealth(tc.host, tc.ceph); got != tc.want {
+			t.Errorf("%v: %s", tc, got)
+		}
+	}
+}
+
+func TestLiveInventoryRequiresVerifiedFacts(t *testing.T) {
+	h := NewNativeHandler(nil, map[string]config.NativeHostConfig{"kvm11": {Address: "192.0.2.11:22"}})
+	h.Connect = func(config.NativeHostConfig) (nativeBroker, error) {
+		return sampleBroker{`{"hostname":"kvm11.example","kernel":"6.0","os":"VM Alpha","cpu":16,"cpuModel":"test","physicalInterfaces":["ens192"],"memory":{"total":34359738368}}`}, nil
+	}
+	inventory, err := h.LiveInventory(context.Background(), "kvm11")
+	if err != nil || inventory.CPU != 16 || inventory.Memory.Total != 34359738368 {
+		t.Fatalf("unexpected verified inventory: %#v, %v", inventory, err)
+	}
+	h.Connect = func(config.NativeHostConfig) (nativeBroker, error) {
+		return sampleBroker{`{"hostname":"kvm11.example","kernel":"","os":"VM Alpha","cpu":16,"memory":{"total":34359738368}}`}, nil
+	}
+	if _, err := h.LiveInventory(context.Background(), "kvm11"); err == nil {
+		t.Fatal("accepted incomplete inventory")
+	}
+}

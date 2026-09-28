@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -33,6 +34,51 @@ func NewNativeHandler(db *gorm.DB, hosts map[string]config.NativeHostConfig) *Na
 		return nativehost.New(nativehost.Config{Address: cfg.Address, User: cfg.User, PrivateKeyFile: cfg.PrivateKeyFile, KnownHostsFile: cfg.KnownHostsFile})
 	}}
 }
+
+type nativeHostInventory struct {
+	Hostname           string   `json:"hostname"`
+	Version            string   `json:"version"`
+	OS                 string   `json:"os"`
+	Kernel             string   `json:"kernel"`
+	CPU                int      `json:"cpu"`
+	CPUModel           string   `json:"cpuModel"`
+	PhysicalInterfaces []string `json:"physicalInterfaces"`
+	Memory             struct {
+		Total int64 `json:"total"`
+	} `json:"memory"`
+}
+
+// IsEnrolled reports whether the fixed native broker has an explicit configuration.
+func (h *NativeHandler) IsEnrolled(name string) bool {
+	_, ok := h.Hosts[name]
+	return ok
+}
+
+// LiveInventory reads and validates current host facts. It never falls back to
+// cached values; callers must treat an error as unavailable telemetry.
+func (h *NativeHandler) LiveInventory(ctx context.Context, name string) (nativeHostInventory, error) {
+	var inventory nativeHostInventory
+	cfg, ok := h.Hosts[name]
+	if !ok {
+		return inventory, fmt.Errorf("host is not enrolled")
+	}
+	broker, err := h.Connect(cfg)
+	if err != nil {
+		return inventory, fmt.Errorf("host enrollment is unavailable")
+	}
+	result, err := broker.Call(ctx, nativehost.Request{Operation: "inventory", Arguments: map[string]any{}})
+	if err != nil {
+		return inventory, fmt.Errorf("live host inventory unavailable")
+	}
+	if err := json.Unmarshal(result, &inventory); err != nil {
+		return inventory, fmt.Errorf("invalid host inventory")
+	}
+	if inventory.Hostname == "" || inventory.CPU < 1 || inventory.Memory.Total < 1 || inventory.Kernel == "" || (inventory.OS == "" && inventory.Version == "") {
+		return nativeHostInventory{}, fmt.Errorf("incomplete host inventory")
+	}
+	return inventory, nil
+}
+
 func (h *NativeHandler) List(c *gin.Context) {
 	names := make([]string, 0, len(h.Hosts))
 	for name := range h.Hosts {
