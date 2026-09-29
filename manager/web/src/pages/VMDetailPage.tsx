@@ -54,6 +54,13 @@ export default function VMDetailPage() {
     catch { toast.error(`${name} request failed`); }
     finally { setPending(false); }
   }
+  async function requestGuestAgent() {
+    if (!id || pending) return;
+    setPending(true);
+    try { const response = await vmAPI.requestGuestAgent(id); toast.success(response.data.message || 'Guest agent requested'); await vm.refetch(); }
+    catch (error: any) { toast.error(error.response?.data?.error || 'Guest agent request failed'); }
+    finally { setPending(false); }
+  }
   if (vm.isPending) return <p className="text-gray-500">Loading virtual machine…</p>;
   if (vm.isError || !vm.data) return <div className="card p-5"><p>Virtual machine unavailable.</p><button className="text-nova-600 mt-2" onClick={() => vm.refetch()}>Retry</button></div>;
   const machine = vm.data;
@@ -62,6 +69,7 @@ export default function VMDetailPage() {
       <button onClick={() => navigate('/vms')} aria-label="Back to VMs"><ArrowLeft className="w-5 h-5" /></button>
       <h1 className="text-2xl font-display font-semibold">{machine.name}</h1><StatusBadge status={machine.status} />
       <div className="ml-auto flex gap-2">
+        <button disabled={pending} onClick={requestGuestAgent} className="btn-secondary">Install Guest Agent</button>
         {machine.status === 'Stopped' && <button disabled={pending} onClick={() => action('start')} className="btn-primary">Start</button>}
         {machine.status === 'Running' && <>
           <button disabled={pending} onClick={() => action('pause')} className="btn-secondary">Pause</button>

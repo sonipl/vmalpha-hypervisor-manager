@@ -136,7 +136,9 @@ func (h *VMHandler) CreateVM(c *gin.Context) {
 	requestedCloudInit := req.CloudInit
 	req.CloudInit = injectGuestAgent(req.OS, req.CloudInit)
 	if requestedCloudInit == "" && req.CloudInit != "" {
-		if req.Annotations == nil { req.Annotations = models.JSONMap{} }
+		if req.Annotations == nil {
+			req.Annotations = models.JSONMap{}
+		}
 		req.Annotations["vmalpha.io/guest-agent"] = "requested"
 	}
 
@@ -267,6 +269,39 @@ func (h *VMHandler) UpdateVM(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, vm)
+}
+
+// RequestGuestAgent queues the immutable Linux cloud-init profile for the next
+// provisioning pass. It deliberately does not overwrite caller cloud-init or
+// attempt password-based remote installation on an existing guest.
+func (h *VMHandler) RequestGuestAgent(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid VM ID"})
+		return
+	}
+	var vm models.VirtualMachine
+	if err := h.DB.First(&vm, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "VM not found"})
+		return
+	}
+	if !isLinux(vm.OS) {
+		c.JSON(http.StatusConflict, gin.H{"error": "VM Alpha Guest Agent is available for Linux guests"})
+		return
+	}
+	if vm.CloudInit == "" {
+		vm.CloudInit = injectGuestAgent(vm.OS, "")
+	}
+	if vm.Annotations == nil {
+		vm.Annotations = models.JSONMap{}
+	}
+	vm.Annotations["vmalpha.io/guest-agent"] = "requested"
+	if err := h.DB.Save(&vm).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to queue guest agent"})
+		return
+	}
+	h.Hub.Broadcast(websocket.Event{Type: "vm.updated", Resource: "virtualmachine", ID: vm.ID.String(), Data: vm})
+	c.JSON(http.StatusAccepted, gin.H{"vm": vm, "status": "requested", "message": "Guest agent will install on the next cloud-init provisioning pass."})
 }
 
 // DeleteVM godoc

@@ -75,6 +75,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 			vms.PUT("/:id", middleware.RBACMiddleware("virtualmachines", "update"), vmHandler.UpdateVM)
 			vms.DELETE("/:id", middleware.RBACMiddleware("virtualmachines", "delete"), vmHandler.DeleteVM)
 			vms.POST("/:id/actions/:action", middleware.RBACMiddleware("virtualmachines", "update"), vmHandler.VMAction)
+			vms.POST("/:id/guest-agent", middleware.RBACMiddleware("virtualmachines", "update"), vmHandler.RequestGuestAgent)
 			vms.POST("/:id/console", middleware.RBACMiddleware("virtualmachines", "read"), consoleHandler.Create)
 		}
 
