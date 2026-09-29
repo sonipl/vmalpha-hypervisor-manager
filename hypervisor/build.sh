@@ -5,7 +5,9 @@ SOURCE=$(cd -- "$(dirname -- "$0")" && pwd)
 BUILD=$(cd -- "$SOURCE/.." && pwd)
 case "$BUILD" in /repos/vmalpha-rocky9/builds/*) ;; *) echo 'Refusing build outside isolated build tree'; exit 1;; esac
 BASE="$BUILD/inputs/Rocky-9.8-x86_64-boot.iso"
-OUT="$BUILD/output/vm-alpha-hypervisor-1.0-x86_64-online.iso"
+VERSION=$(tr -d '\n' < "$SOURCE/VERSION")
+case "$VERSION" in ''|*[!0-9.]*|.*|*.) echo 'Invalid VM Alpha version'; exit 1;; esac
+OUT="$BUILD/output/vm-alpha-hypervisor-${VERSION}-x86_64-online.iso"
 PAYLOAD=$(realpath -e "$BUILD/features")
 test -f "$PAYLOAD/payload-manifest.json"
 python3 "$SOURCE/features/verify-payload.py" "$PAYLOAD"
@@ -53,7 +55,7 @@ xorriso -indev "$BASE" -outdev "$OUT" \
   -map "$SOURCE/README.md" /VMALPHA-README.md \
   -map "$SOURCE/ACCEPTANCE.md" /ACCEPTANCE.md \
   -map "$SOURCE/docs" /docs \
-  -volid VMALPHA-1-0 -boot_image any replay \
+  -volid "VMALPHA-${VERSION//./-}" -boot_image any replay \
   -append_partition 2 0xef "$BUILD/work/rendered/efiboot.img" \
   -boot_image any appended_part_as=gpt -commit -end
 implantisomd5 "$OUT"

@@ -15,6 +15,10 @@ if not re.fullmatch(r'\$6\$[A-Za-z0-9./]{1,16}\$[A-Za-z0-9./]{86}', password_has
 
 source = pathlib.Path(__file__).resolve().parent
 out = pathlib.Path(sys.argv[1])
+version = (source / 'VERSION').read_text().strip()
+if not re.fullmatch(r'[0-9]+(?:\.[0-9]+)+', version):
+    raise SystemExit('Invalid VM Alpha version')
+volume_id = 'VMALPHA-' + version.replace('.', '-')
 out.mkdir(parents=True, exist_ok=True)
 payload = io.BytesIO()
 def product_member(member):
@@ -26,11 +30,11 @@ def product_member(member):
     return member
 
 with tarfile.open(fileobj=payload, mode='w:gz') as tf:
-    for name in ('README.md', 'ACCEPTANCE.md', 'docs', 'storage-ready.py', 'vmalpha-storage-ready.service', 'monitoring', 'features', 'vmalpha_monitoring.py', 'vmalpha_san.py', 'vmalpha_rbd.py', 'vmalpha_storage.py', 'vmalpha_containers.py', 'components.json', 'vmalpha_auth.py', 'vmalpha_security.py', 'vmalpha_datastore.py', 'hostclient', 'branding', 'install-product.sh', 'vmalpha-api.py', 'vmalpha-ssh-gateway.py', 'vmalpha-console.py', 'vmalpha-vnc.py', 'firstboot.sh', 'vmalpha-firstboot.service', 'default-network.xml'):
+    for name in ('VERSION', 'README.md', 'ACCEPTANCE.md', 'docs', 'storage-ready.py', 'vmalpha-storage-ready.service', 'monitoring', 'features', 'vmalpha_monitoring.py', 'vmalpha_san.py', 'vmalpha_rbd.py', 'vmalpha_storage.py', 'vmalpha_containers.py', 'components.json', 'vmalpha_auth.py', 'vmalpha_security.py', 'vmalpha_datastore.py', 'hostclient', 'branding', 'install-product.sh', 'vmalpha-api.py', 'vmalpha-ssh-gateway.py', 'vmalpha-console.py', 'vmalpha-vnc.py', 'firstboot.sh', 'vmalpha-firstboot.service', 'default-network.xml'):
         tf.add(source / name, arcname=name, filter=product_member)
 encoded = '\n'.join(textwrap.wrap(base64.b64encode(payload.getvalue()).decode(), 76))
 packages = (source / 'packages.txt').read_text().strip()
-kickstart = '''# VMALPHA 1.0 / Rocky Linux 9.8: ONLINE, interactive install.
+kickstart = '''# VMALPHA @@VERSION@@ / Rocky Linux 9.8: ONLINE, interactive install.
 # Disk selection remains interactive. Initial UI administrator is requested by the owner.
 graphical
 lang en_US.UTF-8
@@ -80,9 +84,9 @@ systemctl enable virtqemud.socket virtnetworkd.socket virtstoraged.socket virtpr
 restorecon -RF /usr/share/vmalpha /usr/share/cockpit/hostclient /usr/libexec/vmalpha-firstboot /etc/vmalpha-release /etc/cockpit
 %end
 '''
-(out / 'vmalpha.ks').write_text(kickstart.replace('@@ADMIN_PASSWORD_HASH@@', password_hash))
-args = 'inst.stage2=hd:LABEL=VMALPHA-1-0 inst.ks=hd:LABEL=VMALPHA-1-0:/vmalpha/vmalpha.ks ip=dhcp'
-(out / 'grub.cfg').write_text('''set default=0
+(out / 'vmalpha.ks').write_text(kickstart.replace('@@ADMIN_PASSWORD_HASH@@', password_hash).replace('@@VERSION@@', version))
+args = f'inst.stage2=hd:LABEL={volume_id} inst.ks=hd:LABEL={volume_id}:/vmalpha/vmalpha.ks ip=dhcp'
+grub = '''set default=0
 set timeout=-1
 insmod efi_gop
 insmod efi_uga
@@ -90,8 +94,8 @@ insmod all_video
 insmod gzio
 insmod part_gpt
 insmod ext2
-search --no-floppy --set=root -l 'VMALPHA-1-0'
-menuentry 'Install VM Alpha Hypervisor 1.0 - VM Alpha Linux (online, interactive)' {
+search --no-floppy --set=root -l '@@VOLUME_ID@@'
+menuentry 'Install VM Alpha Hypervisor @@VERSION@@ - VM Alpha Linux (online, interactive)' {
     linuxefi /images/pxeboot/vmlinuz ''' + args + ''' quiet
     initrdefi /images/pxeboot/initrd.img
 }
@@ -100,14 +104,15 @@ menuentry 'Test media and install VM Alpha Hypervisor (online, interactive)' {
     initrdefi /images/pxeboot/initrd.img
 }
 menuentry 'Rescue system' {
-    linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=VMALPHA-1-0 inst.rescue
+    linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=@@VOLUME_ID@@ inst.rescue
     initrdefi /images/pxeboot/initrd.img
 }
-''')
-(out / 'isolinux.cfg').write_text('''default vesamenu.c32
+'''
+(out / 'grub.cfg').write_text(grub.replace('@@VERSION@@', version).replace('@@VOLUME_ID@@', volume_id))
+isolinux = '''default vesamenu.c32
 prompt 0
 timeout 0
-menu title VM Alpha Hypervisor 1.0 - VM Alpha Linux
+menu title VM Alpha Hypervisor @@VERSION@@ - VM Alpha Linux
 label vmalpha
   menu label Install VM Alpha Hypervisor (online, interactive)
   menu default
@@ -120,6 +125,7 @@ label check
 label rescue
   menu label Rescue system
   kernel vmlinuz
-  append initrd=initrd.img inst.stage2=hd:LABEL=VMALPHA-1-0 inst.rescue
-''')
+  append initrd=initrd.img inst.stage2=hd:LABEL=@@VOLUME_ID@@ inst.rescue
+'''
+(out / 'isolinux.cfg').write_text(isolinux.replace('@@VERSION@@', version).replace('@@VOLUME_ID@@', volume_id))
 print('Rendered kickstart and BIOS/UEFI menus:', out)

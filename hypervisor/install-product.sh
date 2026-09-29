@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 SOURCE=$(cd -- "$(dirname -- "$0")" && pwd)
+VERSION=$(tr -d '\n' < "$SOURCE/VERSION")
+case "$VERSION" in ''|*[!0-9.]*|.*|*.) echo 'Invalid VM Alpha version' >&2; exit 1;; esac
 install -d /usr/share/cockpit/hostclient /usr/share/vmalpha /etc/cockpit /etc/sudoers.d
 install -d -m 2755 -o root -g systemd-journal /var/log/journal
 install -d /etc/systemd/journald.conf.d
@@ -44,30 +46,32 @@ if ! authselect current >/dev/null 2>&1; then
  authselect select minimal with-faillock --force
 fi
 # Keep ID, ID_LIKE, VERSION_ID, PLATFORM_ID and RPM repository identities.
-python3 - <<'PY'
+VMALPHA_VERSION="$VERSION" python3 - <<'PY'
+import os
 from pathlib import Path
+version=os.environ['VMALPHA_VERSION']
 p=Path('/etc/os-release');s=p.read_text();out=[]
 for line in s.splitlines():
  key=line.split('=',1)[0]
  if key=='NAME':line='NAME="VM Alpha Linux"'
- if key=='VERSION':line='VERSION="1.0"'
+ if key=='VERSION':line=f'VERSION="{version}"'
  if key=='LOGO':line='LOGO="vmalpha"'
- if key=='PRETTY_NAME':line='PRETTY_NAME="VM Alpha Linux 1.0"'
+ if key=='PRETTY_NAME':line=f'PRETTY_NAME="VM Alpha Linux {version}"'
  out.append(line)
 # Replace the symlink with an independent presentation identity; preserve upstream file.
 if p.is_symlink():p.unlink()
 p.write_text('\n'.join(out)+'\n')
 PY
-printf '%s\n' 'VM Alpha Hypervisor 1.0 (VM Alpha Linux 1.0)' > /etc/vmalpha-release
-printf '%s\n' 'VM Alpha Hypervisor 1.0' 'Authorized system access only.' > /etc/issue
-printf '%s\n' 'VM Alpha Hypervisor 1.0 on VM Alpha Linux 1.0' 'Web management: https://<host-address>:9090' > /etc/motd
+printf '%s\n' "VM Alpha Hypervisor $VERSION (VM Alpha Linux $VERSION)" > /etc/vmalpha-release
+printf '%s\n' "VM Alpha Hypervisor $VERSION" 'Authorized system access only.' > /etc/issue
+printf '%s\n' "VM Alpha Hypervisor $VERSION on VM Alpha Linux $VERSION" 'Web management: https://<host-address>:9090' > /etc/motd
 install -d /usr/share/vmalpha/login
 test -f /usr/share/vmalpha/login/upstream-login.html || cp /usr/share/cockpit/static/login.html /usr/share/vmalpha/login/upstream-login.html
 cp /usr/share/vmalpha/login/upstream-login.html /usr/share/vmalpha/login/login.html
 install -m 0644 "$SOURCE/branding/branding.css" /usr/share/cockpit/static/vmalpha-branding.css
 install -m 0644 "$SOURCE/branding/brand.js" /usr/share/cockpit/static/vmalpha-brand.js
 sed -i 's@</head>@<script defer src="cockpit/static/vmalpha-brand.js"></script></head>@' /usr/share/vmalpha/login/login.html
-sed -i 's@cockpit/static/branding.css@cockpit/static/vmalpha-branding.css?v=1.0@' /usr/share/vmalpha/login/login.html
+sed -i "s@cockpit/static/branding.css@cockpit/static/vmalpha-branding.css?v=$VERSION@" /usr/share/vmalpha/login/login.html
 cp /usr/share/vmalpha/login/login.html /usr/share/cockpit/static/login.html
 # Product branding override uses supported Cockpit branding paths.
 for dir in /etc/cockpit/branding /usr/share/cockpit/branding/default; do
