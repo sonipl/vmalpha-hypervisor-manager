@@ -289,17 +289,26 @@ func (h *VMHandler) RequestGuestAgent(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "VM Alpha Guest Agent is available for Linux guests"})
 		return
 	}
-	if vm.CloudInit == "" {
-		vm.CloudInit = injectGuestAgent(vm.OS, "")
+	cloudInit := vm.CloudInit
+	if cloudInit == "" {
+		cloudInit = injectGuestAgent(vm.OS, "")
 	}
 	if vm.Annotations == nil {
 		vm.Annotations = models.JSONMap{}
 	}
 	vm.Annotations["vmalpha.io/guest-agent"] = "requested"
-	if err := h.DB.Save(&vm).Error; err != nil {
+	// Update only the fields this action owns. Imported VM records can retain a
+	// historical tenant reference that no longer exists; saving the full model
+	// would validate that unrelated reference and reject an otherwise valid
+	// guest-agent request.
+	if err := h.DB.Model(&models.VirtualMachine{}).Where("id = ?", vm.ID).Updates(map[string]any{
+		"cloud_init":  cloudInit,
+		"annotations": vm.Annotations,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to queue guest agent"})
 		return
 	}
+	vm.CloudInit = cloudInit
 	h.Hub.Broadcast(websocket.Event{Type: "vm.updated", Resource: "virtualmachine", ID: vm.ID.String(), Data: vm})
 	c.JSON(http.StatusAccepted, gin.H{"vm": vm, "status": "requested", "message": "Guest agent will install on the next cloud-init provisioning pass."})
 }
