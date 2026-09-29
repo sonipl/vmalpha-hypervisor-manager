@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -20,11 +21,75 @@ import (
 const brokerCommand = "sudo -n /usr/libexec/vmalpha-api"
 const maxResponse = 8 * 1024 * 1024
 
+var guestName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,62}$`)
+
 type Config struct{ Address, User, PrivateKeyFile, KnownHostsFile string }
 type Client struct {
 	address string
 	ssh     *ssh.ClientConfig
 }
+
+// Console opens an authenticated byte stream to a single guest's local VNC
+// proxy. The hypervisor validates the same guest name and enforces vm.console
+// authorization; no VNC TCP listener is exposed by this transport.
+func (c *Client) Console(ctx context.Context, guest string) (io.ReadWriteCloser, error) {
+	if !guestName.MatchString(guest) {
+		return nil, errors.New("invalid guest name")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", c.address)
+	if err != nil {
+		cancel()
+		return nil, errors.New("host connection failed")
+	}
+	transport, channels, requests, err := ssh.NewClientConn(conn, c.address, c.ssh)
+	if err != nil {
+		cancel()
+		conn.Close()
+		return nil, fmt.Errorf("host authentication or identity verification failed: %w", err)
+	}
+	client := ssh.NewClient(transport, channels, requests)
+	session, err := client.NewSession()
+	if err != nil {
+		cancel()
+		client.Close()
+		return nil, errors.New("host console session failed")
+	}
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		cancel()
+		session.Close()
+		client.Close()
+		return nil, errors.New("host console input unavailable")
+	}
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		cancel()
+		session.Close()
+		client.Close()
+		return nil, errors.New("host console output unavailable")
+	}
+	session.Stderr = io.Discard
+	if err := session.Start("sudo -n /usr/libexec/vmalpha-vnc " + guest); err != nil {
+		cancel()
+		session.Close()
+		client.Close()
+		return nil, errors.New("host console unavailable")
+	}
+	return &consoleStream{Reader: stdout, Writer: stdin, close: func() error {
+		cancel()
+		_ = session.Close()
+		return client.Close()
+	}}, nil
+}
+
+type consoleStream struct {
+	io.Reader
+	io.Writer
+	close func() error
+}
+
+func (s *consoleStream) Close() error { return s.close() }
 
 // New requires an explicitly enrolled host key and a dedicated SSH identity.
 // Trust-on-first-use and password authentication are deliberately unavailable.

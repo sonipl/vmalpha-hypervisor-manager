@@ -68,6 +68,7 @@ export const vmAPI = {
   delete: (id: string) => api.delete(`/vms/${id}`),
   action: (id: string, action: string, data?: Record<string, unknown>) =>
     api.post(`/vms/${id}/actions/${action}`, data),
+  createConsole: (id: string) => api.post<{ endpoint: string; expires_in: number }>(`/vms/${id}/console`),
 };
 
 export const templateAPI = {

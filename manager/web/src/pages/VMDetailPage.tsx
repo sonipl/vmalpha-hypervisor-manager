@@ -1,10 +1,42 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import RFB from '@novnc/novnc';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { vmAPI, storageAPI } from '@/services/api';
 import StatusBadge from '@/components/common/StatusBadge';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+function ConsolePanel({ vmID }: { vmID: string }) {
+  const target = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string>();
+  const [connecting, setConnecting] = useState(true);
+  useEffect(() => {
+    let rfb: RFB | undefined;
+    let cancelled = false;
+    async function connect() {
+      try {
+        const { data } = await vmAPI.createConsole(vmID);
+        if (cancelled || !target.current) return;
+        const endpoint = new URL(data.endpoint, window.location.origin);
+        endpoint.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        rfb = new RFB(target.current, endpoint.href);
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false;
+        rfb.addEventListener('connect', () => { if (!cancelled) setConnecting(false); });
+        rfb.addEventListener('disconnect', (event: Event & { detail: { clean: boolean } }) => {
+          if (!cancelled && !event.detail.clean) setError('The console connection was closed unexpectedly.');
+        });
+      } catch (err: any) {
+        if (!cancelled) setError(err.response?.data?.error || 'Unable to open this VM console.');
+      }
+    }
+    connect();
+    return () => { cancelled = true; rfb?.disconnect(); };
+  }, [vmID]);
+  if (error) return <div className="card p-5 text-sm text-red-700">{error}</div>;
+  return <section className="card p-3"><div ref={target} className="min-h-[480px] bg-black" aria-label="Virtual machine console" />{connecting && <p className="p-2 text-sm text-gray-500">Connecting to the host console…</p>}</section>;
+}
 
 export default function VMDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +89,7 @@ export default function VMDetailPage() {
       </section>
     </>}
     {tab === 'performance' && <p className="card p-5 text-sm text-gray-500">Live VM utilization and history are unavailable until monitoring is connected.</p>}
-    {tab === 'console' && <p className="card p-5 text-sm text-gray-500">No console session is connected. Central console integration is not available yet.</p>}
+    {tab === 'console' && <ConsolePanel vmID={machine.id} />}
     {tab === 'snapshots' && <section className="card p-5"><h2 className="font-semibold mb-3">Recorded Snapshots</h2>
       {snapshots.isPending ? <p>Loading snapshots…</p> : snapshots.isError ? <p>Snapshots unavailable.</p> : !snapshots.data?.length ? <p>No snapshots recorded.</p> : snapshots.data.map((snapshot) => <div key={snapshot.id} className="py-3 border-b border-gray-100"><p className="font-medium">{snapshot.name}</p><p className="text-sm text-gray-500">{new Date(snapshot.created_at).toLocaleString()} · {snapshot.size_mb} MB · {snapshot.status}</p></div>)}
     </section>}

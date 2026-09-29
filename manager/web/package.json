@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.51.0",
+	"@novnc/novnc": "1.5.0",
     "axios": "^1.7.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",

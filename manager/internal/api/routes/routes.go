@@ -28,6 +28,7 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 
 	// Initialize handlers
 	vmHandler := handlers.NewVMHandler(db, hub, log)
+	consoleHandler := handlers.NewConsoleHandler(db, cfg.NativeHosts, log)
 	hostHandler := handlers.NewHostHandler(db, hub, log)
 	nativeHandler := handlers.NewNativeHandler(db, cfg.NativeHosts)
 	hostHandler.Native = nativeHandler
@@ -74,7 +75,13 @@ func setupWithMiddleware(cfg *config.Config, db *gorm.DB, hub *ws.Hub, log *logr
 			vms.PUT("/:id", middleware.RBACMiddleware("virtualmachines", "update"), vmHandler.UpdateVM)
 			vms.DELETE("/:id", middleware.RBACMiddleware("virtualmachines", "delete"), vmHandler.DeleteVM)
 			vms.POST("/:id/actions/:action", middleware.RBACMiddleware("virtualmachines", "update"), vmHandler.VMAction)
+			vms.POST("/:id/console", middleware.RBACMiddleware("virtualmachines", "read"), consoleHandler.Create)
 		}
+
+		// A short-lived, one-use grant created on the authenticated route above
+		// authenticates this WebSocket handshake. Browser WebSockets cannot carry
+		// the Manager's Authorization header.
+		r.GET("/api/v1/console/stream", consoleHandler.Stream)
 
 		// Native enrollment and operations currently require a live Platform Admin.
 		native := auth.Group("/native")
