@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import RFB from '@novnc/novnc';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { vmAPI, storageAPI } from '@/services/api';
+import { vmAPI, storageAPI, nativeAPI } from '@/services/api';
 import StatusBadge from '@/components/common/StatusBadge';
 import NativePerformance from '@/components/NativePerformance';
 import MetricsMatrix from '@/components/MetricsMatrix';
@@ -50,7 +50,17 @@ export default function VMDetailPage() {
   async function action(name: string) {
     if (!id || pending) return;
     setPending(true);
-    try { await vmAPI.action(id, name); toast.success(`${name} request accepted`); await vm.refetch(); }
+    try {
+      const nativeAction: Record<string, string> = { start: 'start', stop: 'shutdown', restart: 'reboot', pause: 'suspend', unpause: 'resume' };
+      if (machine.host_node && nativeAction[name]) {
+        await nativeAPI.operate(machine.host_node, 'vm-action', { name: machine.name, action: nativeAction[name] }, crypto.randomUUID());
+        toast.success(`${name} request accepted by ${machine.host_node}`);
+      } else {
+        await vmAPI.action(id, name);
+        toast.success(`${name} request accepted`);
+      }
+      await vm.refetch();
+    }
     catch { toast.error(`${name} request failed`); }
     finally { setPending(false); }
   }
