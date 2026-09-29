@@ -103,7 +103,8 @@ func (h *ConsoleHandler) Stream(c *gin.Context) {
 		return
 	}
 	defer stream.Close()
-	conn, err := websocket.Upgrader{CheckOrigin: sameConsoleOrigin}.Upgrade(c.Writer, c.Request, nil)
+	upgrader := websocket.Upgrader{CheckOrigin: sameConsoleOrigin}
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
 	}
