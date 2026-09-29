@@ -3,6 +3,7 @@ import {isAxiosError} from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import { nativeAPI, type NativeTask } from '@/services/api';
 import NativePerformance from '@/components/NativePerformance';
+import MetricsMatrix from '@/components/MetricsMatrix';
 import NativeStorageNetwork from '@/components/NativeStorageNetwork';
 import { useAuth } from '@/context/AuthContext';
 
@@ -53,7 +54,7 @@ export default function NativeHostsPage() {
   {selected&&inventory.isLoading&&<p>Reading host…</p>}
   {live&&<>
    <section className="rounded-lg border p-4"><h2 className="font-semibold">{live.hostname}</h2><p>VM Alpha {live.version} · {live.cpu} CPUs · {(live.memory.total/1024**3).toFixed(1)} GiB memory · KVM {live.kvm?'available':'unavailable'}</p><p>{live.maintenance?'Maintenance enabled':'Available for placement'} · CPU {live.cpuUsage.toFixed(1)}%</p></section>
-   <NativePerformance host={selected} vms={live.vms.map(v=>v.name)}/>
+   <MetricsMatrix host={selected} scope="host"/><NativePerformance host={selected} vms={live.vms.map(v=>v.name)}/>
    <NativeStorageNetwork key={selected} host={selected} inventory={live} blocked={blocked} operate={operate} selectImage={setImage}/>
    <section className="overflow-x-auto rounded-lg border p-4"><h2 className="mb-3 font-semibold">Virtual machines</h2>{live.vms.length===0?<p>No virtual machines on this host.</p>:<table className="w-full text-left text-sm"><thead><tr><th>Name</th><th>State</th><th>CPU / memory</th><th>Actions</th></tr></thead><tbody>{live.vms.map(vm=><tr key={vm.uuid} className="border-t"><td className="py-3">{vm.name}</td><td>{vm.state}</td><td>{vm.cpu} / {vm.memory} MiB</td><td className="space-x-2">{vm.state==='shut off'&&<button className="btn-secondary" disabled={blocked||live.maintenance} onClick={()=>operate('vm-action',{name:vm.name,action:'start'})}>Start</button>}{vm.state==='running'&&<button className="btn-secondary" disabled={blocked} onClick={()=>operate('vm-action',{name:vm.name,action:'shutdown'})}>Shut down</button>}{vm.state==='paused'&&<button className="btn-secondary" disabled={blocked} onClick={()=>operate('vm-action',{name:vm.name,action:'resume'})}>Resume</button>}</td></tr>)}</tbody></table>}</section>
    <form className="space-y-3 rounded-lg border p-4" onSubmit={e=>{e.preventDefault();void operate('vm-create',{name,mode:'import',image,pool,network,cpu:1,memory:512,size:1,os:'Linux',firmware:'BIOS'});}}>

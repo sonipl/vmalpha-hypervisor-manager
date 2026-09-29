@@ -8,6 +8,8 @@ HOST={
  'network_tx':('sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|vnet.*|virbr.*|cni.*|flannel.*|docker.*"}[2m]))','bytes/s'),
  'disk_read':('sum(rate(node_disk_read_bytes_total{device!~"loop.*|dm-.*"}[2m]))','bytes/s'),
  'disk_write':('sum(rate(node_disk_written_bytes_total{device!~"loop.*|dm-.*"}[2m]))','bytes/s'),
+ 'disk_read_iops':('sum(rate(node_disk_reads_completed_total{device!~"loop.*|dm-.*"}[2m]))','IOPS'),
+ 'disk_write_iops':('sum(rate(node_disk_writes_completed_total{device!~"loop.*|dm-.*"}[2m]))','IOPS'),
  'disk_read_latency':('sum(rate(node_disk_read_time_seconds_total[2m])) / sum(rate(node_disk_reads_completed_total[2m]))','seconds'),
  'disk_write_latency':('sum(rate(node_disk_write_time_seconds_total[2m])) / sum(rate(node_disk_writes_completed_total[2m]))','seconds'),
  'disk_free':('node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs"}','bytes')}
@@ -17,7 +19,11 @@ VM={
  'network_rx':('sum(rate(vmalpha_vm_network_rx_bytes_total{FILTER}[2m]))','bytes/s'),
  'network_tx':('sum(rate(vmalpha_vm_network_tx_bytes_total{FILTER}[2m]))','bytes/s'),
  'disk_read':('sum(rate(vmalpha_vm_disk_rd_bytes_total{FILTER}[2m]))','bytes/s'),
- 'disk_write':('sum(rate(vmalpha_vm_disk_wr_bytes_total{FILTER}[2m]))','bytes/s')}
+ 'disk_write':('sum(rate(vmalpha_vm_disk_wr_bytes_total{FILTER}[2m]))','bytes/s'),
+ 'disk_read_iops':('sum(rate(vmalpha_vm_disk_rd_requests_total{FILTER}[2m]))','IOPS'),
+ 'disk_write_iops':('sum(rate(vmalpha_vm_disk_wr_requests_total{FILTER}[2m]))','IOPS'),
+ 'disk_read_latency':('sum(rate(vmalpha_vm_disk_rd_seconds_total{FILTER}[2m])) / sum(rate(vmalpha_vm_disk_rd_requests_total{FILTER}[2m]))','seconds'),
+ 'disk_write_latency':('sum(rate(vmalpha_vm_disk_wr_seconds_total{FILTER}[2m])) / sum(rate(vmalpha_vm_disk_wr_requests_total{FILTER}[2m]))','seconds')}
 CONTAINERS={
  'cpu':('sum by (namespace,pod) (rate(container_cpu_usage_seconds_total{FILTER,container!="",container!="POD"}[2m]))','CPU cores'),
  'memory':('sum by (namespace,pod) (container_memory_working_set_bytes{FILTER,container!="",container!="POD"})','bytes'),

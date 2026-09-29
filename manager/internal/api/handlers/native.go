@@ -231,8 +231,8 @@ func (h *NativeHandler) Task(c *gin.Context) {
 func (h *NativeHandler) Metrics(c *gin.Context) {
 	scope, metric, window := c.DefaultQuery("scope", "host"), c.DefaultQuery("metric", "cpu"), c.DefaultQuery("range", "1h")
 	catalogs := map[string]map[string]bool{
-		"host":       {"cpu": true, "memory": true, "network_rx": true, "network_tx": true, "disk_read": true, "disk_write": true, "disk_free": true, "disk_read_latency": true, "disk_write_latency": true},
-		"vm":         {"cpu": true, "memory": true, "network_rx": true, "network_tx": true, "disk_read": true, "disk_write": true},
+		"host":       {"cpu": true, "memory": true, "network_rx": true, "network_tx": true, "disk_read": true, "disk_write": true, "disk_read_iops": true, "disk_write_iops": true, "disk_free": true, "disk_read_latency": true, "disk_write_latency": true},
+		"vm":         {"cpu": true, "memory": true, "network_rx": true, "network_tx": true, "disk_read": true, "disk_write": true, "disk_read_iops": true, "disk_write_iops": true, "disk_read_latency": true, "disk_write_latency": true},
 		"containers": {"cpu": true, "memory": true, "network_rx": true, "network_tx": true, "restarts": true, "nodes_ready": true},
 		"storage":    {"health": true, "used": true, "capacity": true, "osd_up": true, "read": true, "write": true, "latency": true},
 	}

@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {LineChart,Line,XAxis,YAxis,Tooltip,ResponsiveContainer} from 'recharts';
 import {nativeAPI} from '@/services/api';
-const catalogs:Record<string,string[]>={host:['cpu','memory','network_rx','network_tx','disk_read','disk_write','disk_free'],vm:['cpu','memory','network_rx','network_tx','disk_read','disk_write'],containers:['cpu','memory','network_rx','network_tx','restarts','nodes_ready'],storage:['health','used','capacity','osd_up','read','write','latency']};
+const catalogs:Record<string,string[]>={host:['cpu','memory','network_rx','network_tx','disk_read','disk_write','disk_read_iops','disk_write_iops','disk_read_latency','disk_write_latency','disk_free'],vm:['cpu','memory','network_rx','network_tx','disk_read','disk_write','disk_read_iops','disk_write_iops','disk_read_latency','disk_write_latency'],containers:['cpu','memory','network_rx','network_tx','restarts','nodes_ready'],storage:['health','used','capacity','osd_up','read','write','latency']};
 export default function NativePerformance({host,vms=[],defaultScope='host'}:{host:string;vms?:string[];defaultScope?:'host'|'vm'|'containers'|'storage'}){
  const [metric,setMetric]=useState('cpu');const [range,setRange]=useState('1h');const [scope,setScope]=useState<'host'|'vm'|'containers'|'storage'>(defaultScope);const [vm,setVM]=useState('');const [seriesIndex,setSeriesIndex]=useState(0);
  const selectedMetric=catalogs[scope].includes(metric)?metric:catalogs[scope][0];

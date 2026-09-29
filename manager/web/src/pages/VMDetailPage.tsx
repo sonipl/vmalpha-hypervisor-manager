@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { vmAPI, storageAPI } from '@/services/api';
 import StatusBadge from '@/components/common/StatusBadge';
 import NativePerformance from '@/components/NativePerformance';
+import MetricsMatrix from '@/components/MetricsMatrix';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -90,7 +91,7 @@ export default function VMDetailPage() {
       </section>
     </>}
     {tab === 'performance' && (machine.host_node
-      ? <NativePerformance host={machine.host_node} vms={[machine.name]} defaultScope="vm" />
+      ? <div className="space-y-5"><MetricsMatrix host={machine.host_node} scope="vm" vm={machine.name} /><NativePerformance host={machine.host_node} vms={[machine.name]} defaultScope="vm" /></div>
       : <p className="card p-5 text-sm text-gray-500">Performance is unavailable until this VM is assigned to an enrolled host.</p>)}
     {tab === 'console' && <ConsolePanel vmID={machine.id} />}
     {tab === 'snapshots' && <section className="card p-5"><h2 className="font-semibold mb-3">Recorded Snapshots</h2>
