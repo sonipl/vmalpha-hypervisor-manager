@@ -48,6 +48,9 @@ export default function VMDetailPage() {
   const [editingHardware, setEditingHardware] = useState(false);
   const [vcpus, setVcpus] = useState('');
   const [memoryMB, setMemoryMB] = useState('');
+  const [attachingDisk, setAttachingDisk] = useState(false);
+  const [diskPath, setDiskPath] = useState('');
+  const [diskTarget, setDiskTarget] = useState('vdb');
   const vm = useQuery({ queryKey: ['vm', id], queryFn: () => vmAPI.get(id!).then((r) => r.data), enabled: !!id });
   const snapshots = useQuery({ queryKey: ['vm-snapshots', id], queryFn: () => storageAPI.listSnapshots({ vm_id: id! }).then((r) => r.data), enabled: !!id && tab === 'snapshots' });
   async function action(name: string) {
@@ -96,6 +99,24 @@ export default function VMDetailPage() {
       toast.error(error.response?.data?.error || 'Hardware update failed. Ensure the VM is powered off.');
     } finally { setPending(false); }
   }
+  async function attachDisk(event: FormEvent) {
+    event.preventDefault();
+    if (!machine.host_node || pending) return;
+    if (!diskPath.trim() || !/^vd[b-z]$/.test(diskTarget)) {
+      toast.error('Provide a datastore disk path and a target from vdb through vdz.');
+      return;
+    }
+    setPending(true);
+    try {
+      await nativeAPI.operate(machine.host_node, 'vm-attach-disk', { name: machine.name, path: diskPath.trim(), target: diskTarget }, crypto.randomUUID());
+      toast.success('Disk attach request accepted by the native Hypervisor.');
+      setAttachingDisk(false);
+      setDiskPath('');
+      await vm.refetch();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Disk attach failed.');
+    } finally { setPending(false); }
+  }
   return <div className="space-y-5">
     <div className="flex items-center gap-3">
       <button onClick={() => navigate('/vms')} aria-label="Back to VMs"><ArrowLeft className="w-5 h-5" /></button>
@@ -103,6 +124,7 @@ export default function VMDetailPage() {
       <div className="ml-auto flex gap-2">
         <button disabled={pending} onClick={requestGuestAgent} className="btn-secondary">Install Guest Agent</button>
         {machine.status === 'Stopped' && machine.host_node && <button disabled={pending} onClick={() => { setVcpus(String(machine.vcpus)); setMemoryMB(String(machine.memory_mb)); setEditingHardware(true); }} className="btn-secondary">Edit Hardware</button>}
+        {machine.host_node && <button disabled={pending} onClick={() => setAttachingDisk(true)} className="btn-secondary">Attach Disk</button>}
         {machine.status === 'Stopped' && <button disabled={pending} onClick={() => action('start')} className="btn-primary">Start</button>}
         {machine.status === 'Running' && <>
           <button disabled={pending} onClick={() => action('pause')} className="btn-secondary">Pause</button>
@@ -118,6 +140,14 @@ export default function VMDetailPage() {
         <label className="block text-sm font-medium">vCPUs<input value={vcpus} onChange={(event) => setVcpus(event.target.value)} type="number" min="1" max="64" required className="mt-1 w-full rounded border p-2" /></label>
         <label className="block text-sm font-medium">Memory (MiB)<input value={memoryMB} onChange={(event) => setMemoryMB(event.target.value)} type="number" min="256" max="131072" required className="mt-1 w-full rounded border p-2" /></label>
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingHardware(false)} disabled={pending} className="btn-secondary">Cancel</button><button type="submit" disabled={pending} className="btn-primary">Apply</button></div>
+      </form>
+    </div>}
+    {attachingDisk && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="attach-disk-title">
+      <form onSubmit={attachDisk} className="card w-full max-w-md space-y-4 p-6 shadow-xl">
+        <div><h2 id="attach-disk-title" className="text-lg font-semibold">Attach existing disk</h2><p className="mt-1 text-sm text-gray-500">Use a QCOW2 disk file from a registered local datastore on {machine.host_node}.</p></div>
+        <label className="block text-sm font-medium">Disk path<input value={diskPath} onChange={(event) => setDiskPath(event.target.value)} placeholder="/var/lib/libvirt/images/data.qcow2" required className="mt-1 w-full rounded border p-2" /></label>
+        <label className="block text-sm font-medium">Target device<input value={diskTarget} onChange={(event) => setDiskTarget(event.target.value)} pattern="vd[b-z]" required className="mt-1 w-full rounded border p-2" /></label>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setAttachingDisk(false)} disabled={pending} className="btn-secondary">Cancel</button><button type="submit" disabled={pending} className="btn-primary">Attach</button></div>
       </form>
     </div>}
     <div className="flex gap-4 border-b border-gray-200 pb-3">
