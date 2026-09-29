@@ -26,7 +26,7 @@ def product_member(member):
     return member
 
 with tarfile.open(fileobj=payload, mode='w:gz') as tf:
-    for name in ('README.md', 'ACCEPTANCE.md', 'docs', 'storage-ready.py', 'vmalpha-storage-ready.service', 'monitoring', 'features', 'vmalpha_monitoring.py', 'vmalpha_san.py', 'vmalpha_rbd.py', 'vmalpha_storage.py', 'vmalpha_containers.py', 'components.json', 'vmalpha_auth.py', 'vmalpha_security.py', 'vmalpha_datastore.py', 'hostclient', 'branding', 'install-product.sh', 'vmalpha-api.py', 'vmalpha-console.py', 'vmalpha-vnc.py', 'firstboot.sh', 'vmalpha-firstboot.service', 'default-network.xml'):
+    for name in ('README.md', 'ACCEPTANCE.md', 'docs', 'storage-ready.py', 'vmalpha-storage-ready.service', 'monitoring', 'features', 'vmalpha_monitoring.py', 'vmalpha_san.py', 'vmalpha_rbd.py', 'vmalpha_storage.py', 'vmalpha_containers.py', 'components.json', 'vmalpha_auth.py', 'vmalpha_security.py', 'vmalpha_datastore.py', 'hostclient', 'branding', 'install-product.sh', 'vmalpha-api.py', 'vmalpha-ssh-gateway.py', 'vmalpha-console.py', 'vmalpha-vnc.py', 'firstboot.sh', 'vmalpha-firstboot.service', 'default-network.xml'):
         tf.add(source / name, arcname=name, filter=product_member)
 encoded = '\n'.join(textwrap.wrap(base64.b64encode(payload.getvalue()).decode(), 76))
 packages = (source / 'packages.txt').read_text().strip()

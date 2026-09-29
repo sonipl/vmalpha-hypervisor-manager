@@ -17,10 +17,11 @@ be regular files without group/other access. The service identity needs access
 to those files; the container runs as an unprivileged user.
 
 On each hypervisor, provision a dedicated SSH key restricted to the Manager's
-source address and the forced command /usr/libexec/vmalpha-api, with forwarding,
+source address and the forced command /usr/libexec/vmalpha-ssh-gateway, with forwarding,
 PTY and user startup files disabled (OpenSSH restrict option). The test enrollment
 uses such a key under root so the fixed broker can apply its existing privilege
-checks; it does not expose a general remote shell. Do not reuse personal or Ceph
+checks; it permits only the fixed broker and a name-validated local VNC stream,
+and does not expose a general remote shell. Do not reuse personal or Ceph
 identities. Never include the private key, host enrollment or deployment config
 in a reusable appliance image. Enrollment UI and rotation remain pending.
 

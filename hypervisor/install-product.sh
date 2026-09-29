@@ -18,6 +18,7 @@ for module in vmalpha_distributed_network.py vmalpha_monitoring.py vmalpha_san.p
  fi
 done
 install -m 0755 "$SOURCE/vmalpha-api.py" /usr/libexec/vmalpha-api
+install -m 0755 "$SOURCE/vmalpha-ssh-gateway.py" /usr/libexec/vmalpha-ssh-gateway
 install -m 0755 "$SOURCE/vmalpha-vnc.py" /usr/libexec/vmalpha-vnc
 install -m 0755 "$SOURCE/vmalpha-console.py" /usr/libexec/vmalpha-console
 install -m 0755 "$SOURCE/storage-ready.py" /usr/libexec/vmalpha-storage-ready
@@ -80,7 +81,7 @@ fi
 for entry in /boot/loader/entries/*.conf; do
  test ! -f "$entry" || sed -i 's/^title Rocky Linux/title VM Alpha Linux/' "$entry"
 done
-restorecon -RF /usr/share/cockpit/hostclient /usr/libexec/vmalpha-api /usr/libexec/vmalpha-console /usr/libexec/vmalpha-vnc /etc/cockpit /etc/sudoers.d/vmalpha-hostclient /etc/os-release /etc/vmalpha-release /usr/share/vmalpha /usr/share/cockpit/static/vmalpha-brand.js /usr/share/cockpit/static/vmalpha-branding.css
+restorecon -RF /usr/share/cockpit/hostclient /usr/libexec/vmalpha-api /usr/libexec/vmalpha-ssh-gateway /usr/libexec/vmalpha-console /usr/libexec/vmalpha-vnc /etc/cockpit /etc/sudoers.d/vmalpha-hostclient /etc/os-release /etc/vmalpha-release /usr/share/vmalpha /usr/share/cockpit/static/vmalpha-brand.js /usr/share/cockpit/static/vmalpha-branding.css
 
 # Keep early installed-boot identity aligned when future kernels regenerate initramfs.
 install -d /usr/lib/dracut/modules.d/99vmalpha

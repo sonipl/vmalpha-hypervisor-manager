@@ -58,7 +58,7 @@ done < "$hosts_file"
 if $dry_run; then
   echo "Validated ${#entries[@]} supplied pinned host key(s)."
   echo "Apply only after this public key is installed on every target root account:"
-  echo 'restrict,command="/usr/bin/sudo -n /usr/libexec/vmalpha-api" <MANAGER_PUBLIC_KEY> manager-native-telemetry'
+  echo 'restrict,command="/usr/libexec/vmalpha-ssh-gateway" <MANAGER_PUBLIC_KEY> manager-native-telemetry'
   exit 0
 fi
 
@@ -120,6 +120,6 @@ finally:
 PY
 
 echo "Enrollment files written. Install this exact restricted key on each target through a trusted channel:"
-printf 'restrict,command="/usr/bin/sudo -n /usr/libexec/vmalpha-api" '
+printf 'restrict,command="/usr/libexec/vmalpha-ssh-gateway" '
 cat "$public_key"
 echo "Restart vmalpha-manager, then validate GET /api/v1/native/hosts/<name>/inventory as a Platform Admin."
