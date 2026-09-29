@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { vmAPI, storageAPI } from '@/services/api';
 import StatusBadge from '@/components/common/StatusBadge';
+import NativePerformance from '@/components/NativePerformance';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -88,7 +89,9 @@ export default function VMDetailPage() {
         {machine.nics?.length ? machine.nics.map((nic) => <p key={nic.id} className="text-sm py-2">{nic.name} · {nic.mac_address} · {nic.ip_address || 'No address reported'} · Network {nic.network_id}</p>) : <p className="text-sm text-gray-500">No interfaces reported.</p>}
       </section>
     </>}
-    {tab === 'performance' && <p className="card p-5 text-sm text-gray-500">Live VM utilization and history are unavailable until monitoring is connected.</p>}
+    {tab === 'performance' && (machine.host_node
+      ? <NativePerformance host={machine.host_node} vms={[machine.name]} />
+      : <p className="card p-5 text-sm text-gray-500">Performance is unavailable until this VM is assigned to an enrolled host.</p>)}
     {tab === 'console' && <ConsolePanel vmID={machine.id} />}
     {tab === 'snapshots' && <section className="card p-5"><h2 className="font-semibold mb-3">Recorded Snapshots</h2>
       {snapshots.isPending ? <p>Loading snapshots…</p> : snapshots.isError ? <p>Snapshots unavailable.</p> : !snapshots.data?.length ? <p>No snapshots recorded.</p> : snapshots.data.map((snapshot) => <div key={snapshot.id} className="py-3 border-b border-gray-100"><p className="font-medium">{snapshot.name}</p><p className="text-sm text-gray-500">{new Date(snapshot.created_at).toLocaleString()} · {snapshot.size_mb} MB · {snapshot.status}</p></div>)}
