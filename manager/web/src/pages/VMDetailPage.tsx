@@ -90,7 +90,7 @@ export default function VMDetailPage() {
       </section>
     </>}
     {tab === 'performance' && (machine.host_node
-      ? <NativePerformance host={machine.host_node} vms={[machine.name]} />
+      ? <NativePerformance host={machine.host_node} vms={[machine.name]} defaultScope="vm" />
       : <p className="card p-5 text-sm text-gray-500">Performance is unavailable until this VM is assigned to an enrolled host.</p>)}
     {tab === 'console' && <ConsolePanel vmID={machine.id} />}
     {tab === 'snapshots' && <section className="card p-5"><h2 className="font-semibold mb-3">Recorded Snapshots</h2>

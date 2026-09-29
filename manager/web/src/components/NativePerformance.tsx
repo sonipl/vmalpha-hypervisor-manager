@@ -3,8 +3,8 @@ import {useQuery} from '@tanstack/react-query';
 import {LineChart,Line,XAxis,YAxis,Tooltip,ResponsiveContainer} from 'recharts';
 import {nativeAPI} from '@/services/api';
 const catalogs:Record<string,string[]>={host:['cpu','memory','network_rx','network_tx','disk_read','disk_write','disk_free'],vm:['cpu','memory','network_rx','network_tx','disk_read','disk_write'],containers:['cpu','memory','network_rx','network_tx','restarts','nodes_ready'],storage:['health','used','capacity','osd_up','read','write','latency']};
-export default function NativePerformance({host,vms=[]}:{host:string;vms?:string[]}){
- const [metric,setMetric]=useState('cpu');const [range,setRange]=useState('1h');const [scope,setScope]=useState('host');const [vm,setVM]=useState('');const [seriesIndex,setSeriesIndex]=useState(0);
+export default function NativePerformance({host,vms=[],defaultScope='host'}:{host:string;vms?:string[];defaultScope?:'host'|'vm'|'containers'|'storage'}){
+ const [metric,setMetric]=useState('cpu');const [range,setRange]=useState('1h');const [scope,setScope]=useState<'host'|'vm'|'containers'|'storage'>(defaultScope);const [vm,setVM]=useState('');const [seriesIndex,setSeriesIndex]=useState(0);
  const selectedMetric=catalogs[scope].includes(metric)?metric:catalogs[scope][0];
  const selectedVM=vms.includes(vm)?vm:vms[0]||'';
  const noVM=scope==='vm'&&!selectedVM;
@@ -16,7 +16,7 @@ export default function NativePerformance({host,vms=[]}:{host:string;vms?:string
  const measured=values.filter(([,v])=>v!==null);const latest=measured[measured.length-1];
  const stale=!!(latest&&result&&result.timestamp-latest[0]>120);
  return <section className="rounded-lg border p-4"><div className="flex flex-wrap items-center gap-3"><h2 className="font-semibold">Measured performance</h2>
-  <label>Scope <select className="input" value={scope} onChange={e=>{setScope(e.target.value);setSeriesIndex(0);}}><option value="host">Host</option><option value="vm">Virtual machine</option><option value="containers">Containers</option><option value="storage">Ceph storage</option></select></label>
+  <label>Scope <select className="input" value={scope} onChange={e=>{setScope(e.target.value as 'host'|'vm'|'containers'|'storage');setSeriesIndex(0);}}><option value="host">Host</option><option value="vm">Virtual machine</option><option value="containers">Containers</option><option value="storage">Ceph storage</option></select></label>
   {scope==='vm'&&<label>Guest <select className="input" value={selectedVM} onChange={e=>setVM(e.target.value)}>{vms.map(v=><option key={v}>{v}</option>)}</select></label>}
   <label>Metric <select className="input" value={selectedMetric} onChange={e=>{setMetric(e.target.value);setSeriesIndex(0);}}>{catalogs[scope].map(m=><option key={m} value={m}>{m.replace(/_/g,' ')}</option>)}</select></label>
   <label>History <select className="input" value={range} onChange={e=>setRange(e.target.value)}>{['1h','6h','24h','7d'].map(r=><option key={r}>{r}</option>)}</select></label></div>
