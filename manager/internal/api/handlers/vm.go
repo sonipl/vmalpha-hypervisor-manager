@@ -133,6 +133,12 @@ func (h *VMHandler) CreateVM(c *gin.Context) {
 	if req.Namespace == "" {
 		req.Namespace = "default"
 	}
+	requestedCloudInit := req.CloudInit
+	req.CloudInit = injectGuestAgent(req.OS, req.CloudInit)
+	if requestedCloudInit == "" && req.CloudInit != "" {
+		if req.Annotations == nil { req.Annotations = models.JSONMap{} }
+		req.Annotations["vmalpha.io/guest-agent"] = "requested"
+	}
 
 	userID, _ := c.Get("user_id")
 	tenantID, _ := c.Get("tenant_id")
