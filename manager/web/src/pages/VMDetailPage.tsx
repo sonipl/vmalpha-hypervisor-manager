@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import RFB from '@novnc/novnc';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -45,6 +45,9 @@ export default function VMDetailPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<'overview' | 'performance' | 'snapshots' | 'console'>('overview');
   const [pending, setPending] = useState(false);
+  const [editingHardware, setEditingHardware] = useState(false);
+  const [vcpus, setVcpus] = useState('');
+  const [memoryMB, setMemoryMB] = useState('');
   const vm = useQuery({ queryKey: ['vm', id], queryFn: () => vmAPI.get(id!).then((r) => r.data), enabled: !!id });
   const snapshots = useQuery({ queryKey: ['vm-snapshots', id], queryFn: () => storageAPI.listSnapshots({ vm_id: id! }).then((r) => r.data), enabled: !!id && tab === 'snapshots' });
   async function action(name: string) {
@@ -74,12 +77,32 @@ export default function VMDetailPage() {
   if (vm.isPending) return <p className="text-gray-500">Loading virtual machine…</p>;
   if (vm.isError || !vm.data) return <div className="card p-5"><p>Virtual machine unavailable.</p><button className="text-nova-600 mt-2" onClick={() => vm.refetch()}>Retry</button></div>;
   const machine = vm.data;
+  async function editHardware(event: FormEvent) {
+    event.preventDefault();
+    if (!machine.host_node || pending) return;
+    const cpu = Number(vcpus);
+    const memory = Number(memoryMB);
+    if (!Number.isInteger(cpu) || cpu < 1 || !Number.isInteger(memory) || memory < 256) {
+      toast.error('Enter at least one vCPU and 256 MB of memory.');
+      return;
+    }
+    setPending(true);
+    try {
+      await nativeAPI.operate(machine.host_node, 'vm-edit', { name: machine.name, cpu, memory }, crypto.randomUUID());
+      toast.success('Hardware update accepted by the native Hypervisor.');
+      setEditingHardware(false);
+      await vm.refetch();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Hardware update failed. Ensure the VM is powered off.');
+    } finally { setPending(false); }
+  }
   return <div className="space-y-5">
     <div className="flex items-center gap-3">
       <button onClick={() => navigate('/vms')} aria-label="Back to VMs"><ArrowLeft className="w-5 h-5" /></button>
       <h1 className="text-2xl font-display font-semibold">{machine.name}</h1><StatusBadge status={machine.status} />
       <div className="ml-auto flex gap-2">
         <button disabled={pending} onClick={requestGuestAgent} className="btn-secondary">Install Guest Agent</button>
+        {machine.status === 'Stopped' && machine.host_node && <button disabled={pending} onClick={() => { setVcpus(String(machine.vcpus)); setMemoryMB(String(machine.memory_mb)); setEditingHardware(true); }} className="btn-secondary">Edit Hardware</button>}
         {machine.status === 'Stopped' && <button disabled={pending} onClick={() => action('start')} className="btn-primary">Start</button>}
         {machine.status === 'Running' && <>
           <button disabled={pending} onClick={() => action('pause')} className="btn-secondary">Pause</button>
@@ -89,6 +112,14 @@ export default function VMDetailPage() {
         {machine.status === 'Paused' && <button disabled={pending} onClick={() => action('unpause')} className="btn-primary">Resume</button>}
       </div>
     </div>
+    {editingHardware && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-hardware-title">
+      <form onSubmit={editHardware} className="card w-full max-w-md space-y-4 p-6 shadow-xl">
+        <div><h2 id="edit-hardware-title" className="text-lg font-semibold">Edit hardware</h2><p className="mt-1 text-sm text-gray-500">Changes apply through {machine.host_node} while this VM is powered off.</p></div>
+        <label className="block text-sm font-medium">vCPUs<input value={vcpus} onChange={(event) => setVcpus(event.target.value)} type="number" min="1" max="64" required className="mt-1 w-full rounded border p-2" /></label>
+        <label className="block text-sm font-medium">Memory (MiB)<input value={memoryMB} onChange={(event) => setMemoryMB(event.target.value)} type="number" min="256" max="131072" required className="mt-1 w-full rounded border p-2" /></label>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingHardware(false)} disabled={pending} className="btn-secondary">Cancel</button><button type="submit" disabled={pending} className="btn-primary">Apply</button></div>
+      </form>
+    </div>}
     <div className="flex gap-4 border-b border-gray-200 pb-3">
       {(['overview', 'performance', 'snapshots', 'console'] as const).map((name) => <button key={name} onClick={() => setTab(name)} className={tab === name ? 'text-nova-600 font-semibold capitalize' : 'text-gray-500 capitalize'}>{name}</button>)}
     </div>
