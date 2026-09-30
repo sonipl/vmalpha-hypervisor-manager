@@ -16,6 +16,7 @@ function ConsolePanel({ vmID }: { vmID: string }) {
   useEffect(() => {
     let rfb: RFB | undefined;
     let cancelled = false;
+    let connected = false;
     async function connect() {
       try {
         const { data } = await vmAPI.createConsole(vmID);
@@ -25,9 +26,14 @@ function ConsolePanel({ vmID }: { vmID: string }) {
         rfb = new RFB(target.current, endpoint.href);
         rfb.scaleViewport = true;
         rfb.resizeSession = false;
-        rfb.addEventListener('connect', () => { if (!cancelled) setConnecting(false); });
+        rfb.addEventListener('connect', () => { connected = true; if (!cancelled) setConnecting(false); });
         rfb.addEventListener('disconnect', (event: Event & { detail: { clean: boolean } }) => {
-          if (!cancelled && !event.detail.clean) setError('The console connection was closed unexpectedly.');
+          if (!cancelled) {
+            setConnecting(false);
+            setError(!connected
+              ? 'The host closed the console before sending a display. Check that this VM has a VNC device and the host console proxy is healthy.'
+              : event.detail.clean ? 'The host closed the console session.' : 'The console connection was interrupted.');
+          }
         });
       } catch (err: any) {
         if (!cancelled) setError(err.response?.data?.error || 'Unable to open this VM console.');
@@ -52,6 +58,13 @@ export default function VMDetailPage() {
   const [diskPath, setDiskPath] = useState('');
   const [diskTarget, setDiskTarget] = useState('vdb');
   const vm = useQuery({ queryKey: ['vm', id], queryFn: () => vmAPI.get(id!).then((r) => r.data), enabled: !!id });
+  const nativeInventory = useQuery({
+    queryKey: ['native-inventory', vm.data?.host_node],
+    queryFn: () => nativeAPI.inventory(vm.data!.host_node!).then((r) => r.data),
+    enabled: !!vm.data?.host_node,
+    refetchInterval: 15000,
+    retry: false,
+  });
   const snapshots = useQuery({ queryKey: ['vm-snapshots', id], queryFn: () => storageAPI.listSnapshots({ vm_id: id! }).then((r) => r.data), enabled: !!id && tab === 'snapshots' });
   async function action(name: string) {
     if (!id || pending) return;
@@ -65,7 +78,7 @@ export default function VMDetailPage() {
         await vmAPI.action(id, name);
         toast.success(`${name} request accepted`);
       }
-      await vm.refetch();
+      await Promise.all([vm.refetch(), nativeInventory.refetch()]);
     }
     catch { toast.error(`${name} request failed`); }
     finally { setPending(false); }
@@ -80,6 +93,11 @@ export default function VMDetailPage() {
   if (vm.isPending) return <p className="text-gray-500">Loading virtual machine…</p>;
   if (vm.isError || !vm.data) return <div className="card p-5"><p>Virtual machine unavailable.</p><button className="text-nova-600 mt-2" onClick={() => vm.refetch()}>Retry</button></div>;
   const machine = vm.data;
+  const liveMachine = nativeInventory.data?.vms.find((guest) => guest.name === machine.name);
+  const liveState = liveMachine?.state.toLowerCase();
+  const liveStatus = liveState === 'running' ? 'Running' : liveState === 'paused' ? 'Paused' : liveState === 'shut off' ? 'Stopped' : machine.status;
+  const liveUnavailable = !!machine.host_node && !nativeInventory.isPending && (!nativeInventory.data || !liveMachine);
+  const operationBlocked = pending || (!!machine.host_node && (!!nativeInventory.isPending || liveUnavailable));
   async function editHardware(event: FormEvent) {
     event.preventDefault();
     if (!machine.host_node || pending) return;
@@ -94,7 +112,7 @@ export default function VMDetailPage() {
       await nativeAPI.operate(machine.host_node, 'vm-edit', { name: machine.name, cpu, memory }, crypto.randomUUID());
       toast.success('Hardware update accepted by the native Hypervisor.');
       setEditingHardware(false);
-      await vm.refetch();
+      await Promise.all([vm.refetch(), nativeInventory.refetch()]);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Hardware update failed. Ensure the VM is powered off.');
     } finally { setPending(false); }
@@ -112,7 +130,7 @@ export default function VMDetailPage() {
       toast.success('Disk attach request accepted by the native Hypervisor.');
       setAttachingDisk(false);
       setDiskPath('');
-      await vm.refetch();
+      await Promise.all([vm.refetch(), nativeInventory.refetch()]);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Disk attach failed.');
     } finally { setPending(false); }
@@ -120,20 +138,26 @@ export default function VMDetailPage() {
   return <div className="space-y-5">
     <div className="flex items-center gap-3">
       <button onClick={() => navigate('/vms')} aria-label="Back to VMs"><ArrowLeft className="w-5 h-5" /></button>
-      <h1 className="text-2xl font-display font-semibold">{machine.name}</h1><StatusBadge status={machine.status} />
+      <h1 className="text-2xl font-display font-semibold">{machine.name}</h1><StatusBadge status={liveStatus} />
       <div className="ml-auto flex gap-2">
-        <button disabled={pending} onClick={requestGuestAgent} className="btn-secondary">Install Guest Agent</button>
-        {machine.status === 'Stopped' && machine.host_node && <button disabled={pending} onClick={() => { setVcpus(String(machine.vcpus)); setMemoryMB(String(machine.memory_mb)); setEditingHardware(true); }} className="btn-secondary">Edit Hardware</button>}
-        {machine.host_node && <button disabled={pending} onClick={() => setAttachingDisk(true)} className="btn-secondary">Attach Disk</button>}
-        {machine.status === 'Stopped' && <button disabled={pending} onClick={() => action('start')} className="btn-primary">Start</button>}
-        {machine.status === 'Running' && <>
-          <button disabled={pending} onClick={() => action('pause')} className="btn-secondary">Pause</button>
-          <button disabled={pending} onClick={() => action('restart')} className="btn-secondary">Restart</button>
-          <button disabled={pending} onClick={() => action('stop')} className="btn-secondary">Stop</button>
+        <button disabled={operationBlocked} onClick={requestGuestAgent} className="btn-secondary">Install Guest Agent</button>
+        {liveStatus === 'Stopped' && machine.host_node && <button disabled={operationBlocked} onClick={() => { setVcpus(String(liveMachine?.cpu ?? machine.vcpus)); setMemoryMB(String(liveMachine?.memory ?? machine.memory_mb)); setEditingHardware(true); }} className="btn-secondary">Edit Hardware</button>}
+        {machine.host_node && <button disabled={operationBlocked} onClick={() => setAttachingDisk(true)} className="btn-secondary">Attach Disk</button>}
+        {liveStatus === 'Stopped' && <button disabled={operationBlocked} onClick={() => action('start')} className="btn-primary">Start</button>}
+        {liveStatus === 'Running' && <>
+          <button disabled={operationBlocked} onClick={() => action('pause')} className="btn-secondary">Pause</button>
+          <button disabled={operationBlocked} onClick={() => action('restart')} className="btn-secondary">Restart</button>
+          <button disabled={operationBlocked} onClick={() => action('stop')} className="btn-secondary">Stop</button>
         </>}
-        {machine.status === 'Paused' && <button disabled={pending} onClick={() => action('unpause')} className="btn-primary">Resume</button>}
+        {liveStatus === 'Paused' && <button disabled={operationBlocked} onClick={() => action('unpause')} className="btn-primary">Resume</button>}
       </div>
     </div>
+    {machine.host_node && <div role={liveUnavailable ? 'alert' : 'status'} className={`rounded border p-3 text-sm ${liveUnavailable ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
+      {liveUnavailable
+        ? `Live state from ${machine.host_node} is unavailable. Host actions are disabled to avoid changing a VM using stale Manager status.`
+        : nativeInventory.isPending ? `Reading live VM state from ${machine.host_node}…`
+          : `Live state from ${machine.host_node}${nativeInventory.data?.version ? ` · ${nativeInventory.data.version}` : ''}.`}
+    </div>}
     {editingHardware && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-hardware-title">
       <form onSubmit={editHardware} className="card w-full max-w-md space-y-4 p-6 shadow-xl">
         <div><h2 id="edit-hardware-title" className="text-lg font-semibold">Edit hardware</h2><p className="mt-1 text-sm text-gray-500">Changes apply through {machine.host_node} while this VM is powered off.</p></div>
@@ -156,17 +180,17 @@ export default function VMDetailPage() {
     {tab === 'overview' && <>
       <dl className="card p-5 grid grid-cols-2 gap-5 text-sm">
         {[
-          ['OS', machine.os], ['vCPUs', String(machine.vcpus)], ['Memory', `${machine.memory_mb} MB`],
+          ['OS', machine.os], ['vCPUs', String(liveMachine?.cpu ?? machine.vcpus)], ['Memory', `${liveMachine?.memory ?? machine.memory_mb} MB`],
           ['IP Address', machine.ip_address || '—'], ['Host', machine.host_node || '—'],
           ['Description', machine.description || '—'], ['Secure Boot', machine.secure_boot ? 'Enabled' : 'Disabled'],
           ['vTPM', machine.vtpm ? 'Enabled' : 'Disabled'],
         ].map(([label, value]) => <div key={label}><dt className="text-gray-500">{label}</dt><dd className="mt-1">{value}</dd></div>)}
       </dl>
       <section className="card p-5"><h2 className="font-semibold mb-3">Disks</h2>
-        {machine.disks?.length ? machine.disks.map((disk) => <p key={disk.id} className="text-sm py-2">{disk.name} · {disk.size_gb} GB · {disk.storage_class} · {disk.bus}</p>) : <p className="text-sm text-gray-500">No disks reported.</p>}
+        {machine.host_node ? liveMachine?.disks?.length ? liveMachine.disks.map((disk) => <p key={`${disk.target}:${disk.path}`} className="text-sm py-2">{disk.target || disk.device} · {disk.path || 'Non-file device'}{disk.device && disk.device !== 'disk' ? ` · ${disk.device}` : ''}</p>) : <p className="text-sm text-gray-500">{liveUnavailable ? 'Live disk inventory is unavailable.' : 'No disks reported by the host.'}</p> : machine.disks?.length ? machine.disks.map((disk) => <p key={disk.id} className="text-sm py-2">{disk.name} · {disk.size_gb} GB · {disk.storage_class} · {disk.bus}</p>) : <p className="text-sm text-gray-500">No disks reported.</p>}
       </section>
       <section className="card p-5"><h2 className="font-semibold mb-3">Network Interfaces</h2>
-        {machine.nics?.length ? machine.nics.map((nic) => <p key={nic.id} className="text-sm py-2">{nic.name} · {nic.mac_address} · {nic.ip_address || 'No address reported'} · Network {nic.network_id}</p>) : <p className="text-sm text-gray-500">No interfaces reported.</p>}
+        {machine.host_node ? liveMachine?.networks?.length ? liveMachine.networks.map((nic) => <p key={nic.mac} className="text-sm py-2">{nic.mac} · Network {nic.network || 'not reported'}</p>) : <p className="text-sm text-gray-500">{liveUnavailable ? 'Live network inventory is unavailable.' : 'No interfaces reported by the host.'}</p> : machine.nics?.length ? machine.nics.map((nic) => <p key={nic.id} className="text-sm py-2">{nic.name} · {nic.mac_address} · {nic.ip_address || 'No address reported'} · Network {nic.network_id}</p>) : <p className="text-sm text-gray-500">No interfaces reported.</p>}
       </section>
     </>}
     {tab === 'performance' && (machine.host_node

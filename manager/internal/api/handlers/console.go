@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -37,10 +38,20 @@ type ConsoleHandler struct {
 	log    *logrus.Logger
 	mu     sync.Mutex
 	grants map[string]consoleGrant
+	open   func(context.Context, config.NativeHostConfig, string) (io.ReadWriteCloser, error)
 }
 
 func NewConsoleHandler(db *gorm.DB, hosts map[string]config.NativeHostConfig, log *logrus.Logger) *ConsoleHandler {
-	return &ConsoleHandler{db: db, hosts: hosts, log: log, grants: make(map[string]consoleGrant)}
+	return &ConsoleHandler{
+		db: db, hosts: hosts, log: log, grants: make(map[string]consoleGrant),
+		open: func(ctx context.Context, cfg config.NativeHostConfig, guest string) (io.ReadWriteCloser, error) {
+			client, err := nativehost.New(nativehost.Config{Address: cfg.Address, User: cfg.User, PrivateKeyFile: cfg.PrivateKeyFile, KnownHostsFile: cfg.KnownHostsFile})
+			if err != nil {
+				return nil, err
+			}
+			return client.Console(ctx, guest)
+		},
+	}
 }
 
 func (h *ConsoleHandler) Create(c *gin.Context) {
@@ -90,13 +101,7 @@ func (h *ConsoleHandler) Stream(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "console host is not enrolled"})
 		return
 	}
-	client, err := nativehost.New(nativehost.Config{Address: cfg.Address, User: cfg.User, PrivateKeyFile: cfg.PrivateKeyFile, KnownHostsFile: cfg.KnownHostsFile})
-	if err != nil {
-		h.log.WithError(err).Warn("console host enrollment unavailable")
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "console host enrollment is unavailable"})
-		return
-	}
-	stream, err := client.Console(context.Background(), grant.guest)
+	stream, err := h.open(c.Request.Context(), cfg, grant.guest)
 	if err != nil {
 		h.log.WithError(err).Warn("console proxy unavailable")
 		c.JSON(http.StatusBadGateway, gin.H{"error": "console proxy unavailable"})
@@ -112,6 +117,10 @@ func (h *ConsoleHandler) Stream(c *gin.Context) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		// A host may close its console stream before sending the RFB banner
+		// (for example, if its VM has no VNC device). Close the WebSocket too
+		// so the browser does not wait forever in its connecting state.
+		defer conn.Close()
 		buf := make([]byte, 64*1024)
 		for {
 			n, readErr := stream.Read(buf)

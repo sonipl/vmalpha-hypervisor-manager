@@ -211,7 +211,9 @@ export default api;
 export interface NativeInventory {
   hostname: string; version: string; kernel: string; cpu: number; cpuUsage: number;
   memory: {total: number; used: number}; kvm: boolean; maintenance: boolean;
-  vms: {name: string; uuid: string; state: string; cpu: number; memory: number}[];
+  vms: {name: string; uuid: string; state: string; cpu: number; memory: number;
+    autostart?: boolean; disks?: {target: string; path: string; device: string}[];
+    networks?: {mac: string; network: string}[]; firmware?: string}[];
   pools: {name: string; type: string; path: string; available: string; state: string}[];
   networks: {name: string; mode: string; bridge: string; active: string}[];
 }

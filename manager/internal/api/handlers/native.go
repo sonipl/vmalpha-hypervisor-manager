@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -134,7 +135,53 @@ func (h *NativeHandler) Inventory(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Live host inventory unavailable"})
 		return
 	}
+	_ = h.reconcileVMStates(c.Request.Context(), c.Param("host"), result)
 	c.Data(http.StatusOK, "application/json", result)
+}
+
+func nativeVMStatus(state string) (models.VMStatus, bool) {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "running":
+		return models.VMStatusRunning, true
+	case "shut off", "shutoff", "shutdown":
+		return models.VMStatusStopped, true
+	case "paused", "pmsuspended":
+		return models.VMStatusPaused, true
+	default:
+		return "", false
+	}
+}
+
+// reconcileVMStates updates Manager's VM list only from an authenticated live
+// host inventory. Unknown host states are left untouched instead of guessed.
+func (h *NativeHandler) reconcileVMStates(ctx context.Context, host string, result json.RawMessage) error {
+	if host == "" || h.DB == nil {
+		return nil
+	}
+	var inventory struct {
+		VMs []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"vms"`
+	}
+	if err := json.Unmarshal(result, &inventory); err != nil {
+		return err
+	}
+	for _, vm := range inventory.VMs {
+		if vm.Name == "" {
+			continue
+		}
+		status, ok := nativeVMStatus(vm.State)
+		if !ok {
+			continue
+		}
+		if err := h.DB.WithContext(ctx).Model(&models.VirtualMachine{}).
+			Where("host_node = ? AND name = ?", host, vm.Name).
+			Update("status", status).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Operations are explicit product actions, not an arbitrary remote shell.
@@ -195,6 +242,14 @@ func (h *NativeHandler) Operate(c *gin.Context) {
 		var rejected *nativehost.BrokerError
 		if errors.As(callErr, &rejected) {
 			task.Status = "Failed"
+		}
+	}
+	if callErr == nil && request.Operation == "vm-action" {
+		// A successful command only means libvirt accepted the request. Read
+		// back live inventory before syncing Manager's VM list so asynchronous
+		// shutdown/start transitions are not reported as already complete.
+		if live, err := broker.Call(c.Request.Context(), nativehost.Request{Operation: "inventory", Arguments: map[string]any{}}); err == nil {
+			_ = h.reconcileVMStates(c.Request.Context(), c.Param("host"), live)
 		}
 	}
 	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/novasphere/novasphere/internal/config"
+	"github.com/novasphere/novasphere/internal/models"
 	"github.com/novasphere/novasphere/internal/services/nativehost"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -92,7 +93,11 @@ func TestNativeMutationRecordedBeforeCall(t *testing.T) {
 				want = 502
 				status = "Unknown"
 			}
-			if w.Code != want || broker.calls != 1 || !strings.Contains(w.Body.String(), status) {
+			calls := 1
+			if !fail {
+				calls = 2 // successful VM actions read back live inventory before returning
+			}
+			if w.Code != want || broker.calls != calls || !strings.Contains(w.Body.String(), status) {
 				t.Fatalf("status %d calls %d: %s", w.Code, broker.calls, w.Body.String())
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
@@ -136,5 +141,24 @@ func TestExplicitBrokerFailureIsRecordedAsFailed(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNativeVMStatusRecognizesLibvirtStatesOnly(t *testing.T) {
+	for _, tc := range []struct {
+		state string
+		want  models.VMStatus
+		ok    bool
+	}{
+		{state: "running", want: models.VMStatusRunning, ok: true},
+		{state: "shut off", want: models.VMStatusStopped, ok: true},
+		{state: "paused", want: models.VMStatusPaused, ok: true},
+		{state: "migrating", ok: false},
+		{state: "", ok: false},
+	} {
+		got, ok := nativeVMStatus(tc.state)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("nativeVMStatus(%q) = (%q, %t), want (%q, %t)", tc.state, got, ok, tc.want, tc.ok)
+		}
 	}
 }
