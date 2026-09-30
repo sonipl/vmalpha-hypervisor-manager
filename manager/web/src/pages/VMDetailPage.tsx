@@ -70,7 +70,7 @@ export default function VMDetailPage() {
     if (!id || pending) return;
     setPending(true);
     try {
-      const nativeAction: Record<string, string> = { start: 'start', stop: 'shutdown', restart: 'reboot', pause: 'suspend', unpause: 'resume' };
+      const nativeAction: Record<string, string> = { start: 'start', stop: 'shutdown', restart: 'reboot', pause: 'suspend', unpause: 'resume', autostart: 'autostart' };
       if (machine.host_node && nativeAction[name]) {
         await nativeAPI.operate(machine.host_node, 'vm-action', { name: machine.name, action: nativeAction[name] }, crypto.randomUUID());
         toast.success(`${name} request accepted by ${machine.host_node}`);
@@ -95,7 +95,10 @@ export default function VMDetailPage() {
   const machine = vm.data;
   const liveMachine = nativeInventory.data?.vms.find((guest) => guest.name === machine.name);
   const liveState = liveMachine?.state.toLowerCase();
-  const liveStatus = liveState === 'running' ? 'Running' : liveState === 'paused' ? 'Paused' : liveState === 'shut off' ? 'Stopped' : machine.status;
+  const liveStatus = liveState === 'running' ? 'Running'
+    : liveState === 'paused' || liveState === 'pmsuspended' ? 'Paused'
+      : liveState === 'shut off' || liveState === 'shutoff' || liveState === 'shutdown' ? 'Stopped'
+        : machine.status;
   const liveUnavailable = !!machine.host_node && !nativeInventory.isPending && (!nativeInventory.data || !liveMachine);
   const operationBlocked = pending || (!!machine.host_node && (!!nativeInventory.isPending || liveUnavailable));
   async function editHardware(event: FormEvent) {
@@ -150,6 +153,7 @@ export default function VMDetailPage() {
           <button disabled={operationBlocked} onClick={() => action('stop')} className="btn-secondary">Stop</button>
         </>}
         {liveStatus === 'Paused' && <button disabled={operationBlocked} onClick={() => action('unpause')} className="btn-primary">Resume</button>}
+        {liveMachine?.autostart === false && <button disabled={operationBlocked} onClick={() => action('autostart')} className="btn-secondary">Enable autostart</button>}
       </div>
     </div>
     {machine.host_node && <div role={liveUnavailable ? 'alert' : 'status'} className={`rounded border p-3 text-sm ${liveUnavailable ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
@@ -181,6 +185,7 @@ export default function VMDetailPage() {
       <dl className="card p-5 grid grid-cols-2 gap-5 text-sm">
         {[
           ['OS', machine.os], ['vCPUs', String(liveMachine?.cpu ?? machine.vcpus)], ['Memory', `${liveMachine?.memory ?? machine.memory_mb} MB`],
+          ['Autostart', liveMachine?.autostart === undefined ? 'Not reported' : liveMachine.autostart ? 'Enabled' : 'Disabled'],
           ['IP Address', machine.ip_address || '—'], ['Host', machine.host_node || '—'],
           ['Description', machine.description || '—'], ['Secure Boot', machine.secure_boot ? 'Enabled' : 'Disabled'],
           ['vTPM', machine.vtpm ? 'Enabled' : 'Disabled'],
